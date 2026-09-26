@@ -24,8 +24,8 @@
       --cell-related: #EBF0FF;
       --accent-blue: #3B82F6;
       --accent-pink: #EC4899;
-      --accent-purple: #8B5CF6;
       --accent-mint: #10B981;
+      --accent-red: #EF4444;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; user-select: none; }
@@ -33,10 +33,12 @@
     .app-container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
 
     header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
-    .logo-title { font-size: 1.4rem; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px; }
+    .logo-title { font-size: 1.3rem; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px; }
+    .header-actions { display: flex; align-items: center; gap: 8px; }
+    .home-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid #CBD5E1; background: white; font-weight: 700; font-size: 0.8rem; color: var(--text-dark); cursor: pointer; display: flex; align-items: center; gap: 4px; }
     .mode-badge { font-size: 0.75rem; font-weight: 700; background: #E2E8F0; color: var(--text-dark); padding: 4px 10px; border-radius: 20px; }
 
-    .card { background: var(--card-bg); border-radius: 16px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
+    .card { background: var(--card-bg); border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
     .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px; }
     .btn:active { transform: scale(0.98); }
     .btn-primary { background: var(--accent-blue); color: white; }
@@ -54,7 +56,7 @@
     .cell.selected { background-color: var(--cell-focus) !important; color: white !important; }
     .cell.same-num { background-color: var(--cell-same); }
     .cell.related { background-color: var(--cell-related); }
-    .cell.incorrect { color: #EF4444; }
+    .cell.incorrect { color: var(--accent-red); background-color: #FEE2E2; }
 
     .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%; padding: 2px; }
     .note-digit { font-size: 0.55rem; color: var(--text-muted); display: flex; justify-content: center; align-items: center; }
@@ -70,12 +72,13 @@
     .battle-header { display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #E2E8F0; }
     .player-card { display: flex; flex-direction: column; gap: 2px; }
     .player-name { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
-    .player-score { font-size: 1.1rem; font-weight: 800; color: var(--text-dark); }
+    .player-score { font-size: 1rem; font-weight: 800; color: var(--text-dark); }
+    .strikes { font-size: 0.75rem; color: var(--accent-red); font-weight: 700; }
     .progress-bar-bg { width: 100%; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden; margin-top: 4px; }
     .progress-bar-fill { height: 100%; background: var(--accent-blue); width: 0%; transition: width 0.3s; }
 
     .powerups { display: flex; gap: 8px; margin-top: 8px; }
-    .power-btn { flex: 1; padding: 8px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.75rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
+    .power-btn { flex: 1; padding: 10px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.8rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
     .pw-freeze { background: #06B6D4; }
     .pw-shield { background: var(--accent-mint); }
 
@@ -84,6 +87,7 @@
     .hidden { display: none !important; }
 
     .frozen-screen { pointer-events: none; filter: blur(2px); opacity: 0.6; }
+    .status-msg { font-size: 0.8rem; color: var(--accent-blue); font-weight: 600; min-height: 18px; }
   </style>
 </head>
 <body>
@@ -91,12 +95,15 @@
 <div class="app-container">
   <header>
     <div class="logo-title">🧩 Sudoku 1v1</div>
-    <div class="mode-badge" id="modeBadge">Menu</div>
+    <div class="header-actions">
+      <button class="home-btn" id="homeBtn" onclick="goHome()">🏠 Home</button>
+      <div class="mode-badge" id="modeBadge">Menu</div>
+    </div>
   </header>
 
   <!-- MAIN MENU -->
   <div id="menuScreen" class="card" style="display:flex; flex-direction:column; gap:12px;">
-    <h2 style="text-align:center; margin-bottom:8px;">Choose Mode</h2>
+    <h2 style="text-align:center; margin-bottom:8px;">Select Mode</h2>
     <button class="btn btn-primary" onclick="showRoomModal()">🎮 1v1 Online Private Room</button>
     <button class="btn btn-secondary" onclick="startMatch('ai')">🤖 1v1 VS Adaptive AI</button>
     <button class="btn btn-outline" onclick="startMatch('solo')">👤 Solo Practice Mode</button>
@@ -108,13 +115,15 @@
     <div id="duelHeader" class="battle-header hidden">
       <div class="player-card" style="width: 45%;">
         <span class="player-name">YOU</span>
-        <span class="player-score" id="p1Score">0 pts</span>
+        <span class="player-score" id="p1ProgressText">0 / 41</span>
+        <span class="strikes" id="p1Strikes">Strikes: ⚪⚪⚪</span>
         <div class="progress-bar-bg"><div id="p1Progress" class="progress-bar-fill"></div></div>
       </div>
       <span style="font-weight:800; color:var(--text-muted)">VS</span>
       <div class="player-card" style="width: 45%; text-align: right;">
         <span class="player-name" id="p2Name">OPPONENT</span>
-        <span class="player-score" id="p2Score">0 pts</span>
+        <span class="player-score" id="p2ProgressText">0 / 41</span>
+        <span class="strikes" id="p2Strikes">Strikes: ⚪⚪⚪</span>
         <div class="progress-bar-bg"><div id="p2Progress" class="progress-bar-fill" style="float:right; background:var(--accent-pink)"></div></div>
       </div>
     </div>
@@ -159,6 +168,7 @@
     <div style="font-size:0.8rem; color:var(--text-muted)">— OR —</div>
     <input type="text" id="roomInput" placeholder="Enter Room Code" style="width:100%; padding:12px; border-radius:10px; border:1px solid #CBD5E1; text-align:center; font-weight:700; text-transform:uppercase;">
     <button class="btn btn-secondary" onclick="joinRoom()">Join Room</button>
+    <div class="status-msg" id="joinStatus"></div>
     <button class="btn btn-outline" onclick="closeRoomModal()">Cancel</button>
   </div>
 </div>
@@ -169,19 +179,21 @@
     <h3>Waiting for Opponent</h3>
     <p style="font-size:0.9rem; color:var(--text-muted)">Share this code with your friend:</p>
     <h1 id="roomCodeDisplay" style="letter-spacing: 4px; color:var(--accent-blue);">------</h1>
+    <div class="status-msg" id="createStatus">Initializing connection...</div>
     <button class="btn btn-secondary" onclick="copyCode()">📋 Copy Code</button>
-    <button class="btn btn-outline" onclick="location.reload()">Cancel</button>
+    <button class="btn btn-outline" onclick="goHome()">Cancel</button>
   </div>
 </div>
 
 <script>
   let board = [], solution = [], initial = [], notes = Array.from({length:81}, ()=>[]);
   let selectedCell = null, isNotesMode = false, gameMode = 'solo';
-  let p1Score = 0, p2Score = 0, p1Completed = 0, p2Completed = 0;
+  let p1Completed = 0, p2Completed = 0, targetCells = 41;
+  let p1Strikes = 0, p2Strikes = 0;
   let isFrozen = false, hasShield = false;
-  let peer = null, conn = null;
+  let peer = null, conn = null, aiTimer = null;
 
-  // Configuration for ICE/STUN servers to bypass mobile firewalls
+  // ICE/STUN configuration to ensure cross-device communication
   const peerConfig = {
     config: {
       iceServers: [
@@ -230,6 +242,7 @@
     ];
     const init = [...sol];
     let removed = 40;
+    targetCells = 40;
     while(removed > 0) {
       let idx = Math.floor(Math.random()*81);
       if(init[idx] !== 0) { init[idx] = 0; removed--; }
@@ -239,6 +252,10 @@
 
   function startMatch(mode, p2Name = "Opponent") {
     gameMode = mode;
+    p1Completed = 0; p2Completed = 0;
+    p1Strikes = 0; p2Strikes = 0;
+    isFrozen = false; hasShield = false;
+
     document.getElementById('menuScreen').classList.add('hidden');
     document.getElementById('gameScreen').classList.remove('hidden');
     document.getElementById('modeBadge').innerText = mode.toUpperCase();
@@ -252,8 +269,12 @@
       document.getElementById('duelHeader').classList.remove('hidden');
       document.getElementById('powerupBar').classList.remove('hidden');
       document.getElementById('p2Name').innerText = p2Name;
+    } else {
+      document.getElementById('duelHeader').classList.add('hidden');
+      document.getElementById('powerupBar').classList.add('hidden');
     }
 
+    updateHeader();
     renderBoard();
     if(mode === 'ai') startAILogic();
   }
@@ -313,12 +334,18 @@
       board[selectedCell] = num;
       if(num === solution[selectedCell]) {
         playTone(600, "triangle", 0.1);
-        p1Score += 50;
         p1Completed++;
         checkWin();
       } else {
-        playTone(150, "sawtooth", 0.2);
-        p1Score = Math.max(0, p1Score - 20);
+        playTone(150, "sawtooth", 0.25);
+        p1Strikes++;
+        if(p1Strikes >= 3) {
+          updateHeader();
+          renderBoard();
+          setTimeout(() => alert("❌ 3 Strikes! You lost the match!"), 100);
+          goHome();
+          return;
+        }
       }
       syncP2P();
     }
@@ -328,9 +355,12 @@
 
   function eraseCell() {
     if(selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
+    if(board[selectedCell] === solution[selectedCell]) p1Completed--;
     board[selectedCell] = 0;
     notes[selectedCell] = [];
     renderBoard();
+    updateHeader();
+    syncP2P();
   }
 
   function toggleNotes() {
@@ -341,83 +371,129 @@
   function useHint() {
     if(selectedCell === null || initial[selectedCell] !== 0) return;
     board[selectedCell] = solution[selectedCell];
-    p1Score = Math.max(0, p1Score - 10);
+    p1Completed++;
     renderBoard();
+    updateHeader();
+    checkWin();
+    syncP2P();
+  }
+
+  function formatStrikes(count) {
+    if(count === 0) return "Strikes: ⚪⚪⚪";
+    if(count === 1) return "Strikes: ❌⚪⚪";
+    if(count === 2) return "Strikes: ❌❌⚪";
+    return "Strikes: ❌❌❌";
   }
 
   function updateHeader() {
-    document.getElementById('p1Score').innerText = `${p1Score} pts`;
-    document.getElementById('p1Progress').style.width = `${(p1Completed/41)*100}%`;
-    document.getElementById('p2Score').innerText = `${p2Score} pts`;
-    document.getElementById('p2Progress').style.width = `${(p2Completed/41)*100}%`;
+    document.getElementById('p1ProgressText').innerText = `${p1Completed} / ${targetCells}`;
+    document.getElementById('p1Progress').style.width = `${(p1Completed/targetCells)*100}%`;
+    document.getElementById('p1Strikes').innerText = formatStrikes(p1Strikes);
+
+    document.getElementById('p2ProgressText').innerText = `${p2Completed} / ${targetCells}`;
+    document.getElementById('p2Progress').style.width = `${(p2Completed/targetCells)*100}%`;
+    document.getElementById('p2Strikes').innerText = formatStrikes(p2Strikes);
   }
 
   function usePowerup(type) {
     if(type === 'freeze') {
       if(conn) conn.send({ type: 'FREEZE' });
-      else if(gameMode === 'ai') alert("Freeze sent to AI!");
+      else if(gameMode === 'ai') alert("Freeze powerup sent to AI!");
     } else if(type === 'shield') {
       hasShield = true;
-      alert("Shield Active! Protected from next Freeze.");
+      alert("Shield Active! Protected from the next Freeze attack.");
     }
   }
 
-  // ROOM MULTIPLAYER (PeerJS)
-  function showRoomModal() { document.getElementById('roomModal').classList.remove('hidden'); }
+  function goHome() {
+    if(aiTimer) clearInterval(aiTimer);
+    if(conn) { conn.close(); conn = null; }
+    if(peer) { peer.destroy(); peer = null; }
+
+    document.getElementById('gameScreen').classList.add('hidden');
+    document.getElementById('roomModal').classList.add('hidden');
+    document.getElementById('waitModal').classList.add('hidden');
+    document.getElementById('menuScreen').classList.remove('hidden');
+    document.getElementById('modeBadge').innerText = "Menu";
+  }
+
+  // PEERJS MULTIPLAYER
+  function showRoomModal() { 
+    document.getElementById('joinStatus').innerText = '';
+    document.getElementById('roomModal').classList.remove('hidden'); 
+  }
   function closeRoomModal() { document.getElementById('roomModal').classList.add('hidden'); }
 
   function createRoom() {
     closeRoomModal();
     const code = Math.random().toString(36).substring(2, 8).toUpperCase();
     document.getElementById('roomCodeDisplay').innerText = code;
+    document.getElementById('createStatus').innerText = 'Connecting to server...';
     document.getElementById('waitModal').classList.remove('hidden');
 
     const data = generateSudoku();
     solution = data.sol; initial = [...data.init]; board = [...data.init];
 
     peer = new Peer(code, peerConfig);
+    peer.on('open', () => {
+      document.getElementById('createStatus').innerText = 'Waiting for opponent to join...';
+    });
+
     peer.on('connection', (c) => {
       conn = c;
       setupP2PConnection();
+    });
+
+    peer.on('error', (err) => {
+      alert("Peer Error: " + err.type);
+      goHome();
     });
   }
 
   function joinRoom() {
     const code = document.getElementById('roomInput').value.trim().toUpperCase();
     if(!code) return alert("Please enter a room code");
-    closeRoomModal();
+    
+    document.getElementById('joinStatus').innerText = 'Connecting to room...';
 
     peer = new Peer(peerConfig);
     peer.on('open', () => {
       conn = peer.connect(code, { reliable: true });
       setupP2PConnection();
     });
+
+    peer.on('error', () => {
+      document.getElementById('joinStatus').innerText = 'Room code not found or unreachable.';
+    });
   }
 
   function setupP2PConnection() {
     conn.on('open', () => {
+      closeRoomModal();
       document.getElementById('waitModal').classList.add('hidden');
       startMatch('p2p', 'Friend');
 
-      // Send puzzle payload to joining device
       if(solution.length > 0) {
-        conn.send({ type: 'START', sol: solution, init: initial });
+        conn.send({ type: 'START', sol: solution, init: initial, target: targetCells });
       }
     });
 
     conn.on('data', (data) => {
       if(data.type === 'START') {
         solution = data.sol; initial = [...data.init]; board = [...data.init];
+        targetCells = data.target;
+        closeRoomModal();
         document.getElementById('waitModal').classList.add('hidden');
         startMatch('p2p', 'Friend');
       } else if(data.type === 'SYNC') {
-        p2Score = data.score;
         p2Completed = data.completed;
+        p2Strikes = data.strikes;
         updateHeader();
+        if(p2Strikes >= 3) alert("🎉 Opponent got 3 strikes! You win!");
       } else if(data.type === 'FREEZE') {
         if(hasShield) {
           hasShield = false;
-          alert("Your Shield blocked a Freeze attack!");
+          alert("🛡️ Your Shield blocked a Freeze attack!");
         } else {
           isFrozen = true;
           document.getElementById('board').classList.add('frozen-screen');
@@ -428,10 +504,15 @@
         }
       }
     });
+
+    conn.on('close', () => {
+      alert("Opponent disconnected.");
+      goHome();
+    });
   }
 
   function syncP2P() {
-    if(conn) conn.send({ type: 'SYNC', score: p1Score, completed: p1Completed });
+    if(conn && conn.open) conn.send({ type: 'SYNC', completed: p1Completed, strikes: p1Strikes });
   }
 
   function copyCode() {
@@ -441,19 +522,20 @@
   }
 
   function startAILogic() {
-    setInterval(() => {
-      if(gameMode === 'ai' && p2Completed < 41) {
+    if(aiTimer) clearInterval(aiTimer);
+    aiTimer = setInterval(() => {
+      if(gameMode === 'ai' && p2Completed < targetCells) {
         p2Completed++;
-        p2Score += 50;
         updateHeader();
+        if(p2Completed >= targetCells) alert("🤖 AI completed the board first!");
       }
-    }, 4000);
+    }, 4500);
   }
 
   function checkWin() {
-    if(p1Completed >= 41) {
+    if(p1Completed >= targetCells) {
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      alert("🎉 Victory! You won!");
+      alert("🎉 Victory! You completed the Sudoku first!");
     }
   }
 
