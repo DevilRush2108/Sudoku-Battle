@@ -87,7 +87,7 @@
     .hidden { display: none !important; }
 
     .frozen-screen { pointer-events: none; filter: blur(2px); opacity: 0.6; }
-    .status-msg { font-size: 0.8rem; color: var(--accent-blue); font-weight: 600; min-height: 18px; }
+    .status-msg { font-size: 0.8rem; color: var(--accent-blue); font-weight: 600; min-height: 20px; }
   </style>
 </head>
 <body>
@@ -115,14 +115,14 @@
     <div id="duelHeader" class="battle-header hidden">
       <div class="player-card" style="width: 45%;">
         <span class="player-name">YOU</span>
-        <span class="player-score" id="p1ProgressText">0 / 41</span>
+        <span class="player-score" id="p1ProgressText">0 / 40</span>
         <span class="strikes" id="p1Strikes">Strikes: ⚪⚪⚪</span>
         <div class="progress-bar-bg"><div id="p1Progress" class="progress-bar-fill"></div></div>
       </div>
       <span style="font-weight:800; color:var(--text-muted)">VS</span>
       <div class="player-card" style="width: 45%; text-align: right;">
         <span class="player-name" id="p2Name">OPPONENT</span>
-        <span class="player-score" id="p2ProgressText">0 / 41</span>
+        <span class="player-score" id="p2ProgressText">0 / 40</span>
         <span class="strikes" id="p2Strikes">Strikes: ⚪⚪⚪</span>
         <div class="progress-bar-bg"><div id="p2Progress" class="progress-bar-fill" style="float:right; background:var(--accent-pink)"></div></div>
       </div>
@@ -178,8 +178,8 @@
   <div class="modal">
     <h3>Waiting for Opponent</h3>
     <p style="font-size:0.9rem; color:var(--text-muted)">Share this code with your friend:</p>
-    <h1 id="roomCodeDisplay" style="letter-spacing: 4px; color:var(--accent-blue);">------</h1>
-    <div class="status-msg" id="createStatus">Initializing connection...</div>
+    <h1 id="roomCodeDisplay" style="letter-spacing: 4px; color:var(--accent-blue);">Generating...</h1>
+    <div class="status-msg" id="createStatus">Connecting to PeerServer...</div>
     <button class="btn btn-secondary" onclick="copyCode()">📋 Copy Code</button>
     <button class="btn btn-outline" onclick="goHome()">Cancel</button>
   </div>
@@ -188,18 +188,21 @@
 <script>
   let board = [], solution = [], initial = [], notes = Array.from({length:81}, ()=>[]);
   let selectedCell = null, isNotesMode = false, gameMode = 'solo';
-  let p1Completed = 0, p2Completed = 0, targetCells = 41;
+  let p1Completed = 0, p2Completed = 0, targetCells = 40;
   let p1Strikes = 0, p2Strikes = 0;
   let isFrozen = false, hasShield = false;
   let peer = null, conn = null, aiTimer = null;
 
-  // ICE/STUN configuration to ensure cross-device communication
+  // WebRTC ICE STUN & TURN Servers Configuration
   const peerConfig = {
     config: {
       iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' }
+        { urls: 'stun:stun2.l.google.com:19302' },
+        { urls: 'stun:stun.services.mozilla.com' },
+        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
       ]
     }
   };
@@ -397,11 +400,11 @@
 
   function usePowerup(type) {
     if(type === 'freeze') {
-      if(conn) conn.send({ type: 'FREEZE' });
+      if(conn && conn.open) conn.send({ type: 'FREEZE' });
       else if(gameMode === 'ai') alert("Freeze powerup sent to AI!");
     } else if(type === 'shield') {
       hasShield = true;
-      alert("Shield Active! Protected from the next Freeze attack.");
+      alert("🛡️ Shield Active! Protected from the next Freeze attack.");
     }
   }
 
@@ -426,17 +429,21 @@
 
   function createRoom() {
     closeRoomModal();
-    const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-    document.getElementById('roomCodeDisplay').innerText = code;
-    document.getElementById('createStatus').innerText = 'Connecting to server...';
+    document.getElementById('roomCodeDisplay').innerText = "------";
+    document.getElementById('createStatus').innerText = "Connecting to server...";
     document.getElementById('waitModal').classList.remove('hidden');
 
     const data = generateSudoku();
     solution = data.sol; initial = [...data.init]; board = [...data.init];
 
-    peer = new Peer(code, peerConfig);
-    peer.on('open', () => {
-      document.getElementById('createStatus').innerText = 'Waiting for opponent to join...';
+    // Destroy existing peer connection if any
+    if(peer) peer.destroy();
+
+    peer = new Peer(peerConfig);
+
+    peer.on('open', (id) => {
+      document.getElementById('roomCodeDisplay').innerText = id.substring(0,6).toUpperCase();
+      document.getElementById('createStatus').innerText = "Waiting for opponent to join...";
     });
 
     peer.on('connection', (c) => {
@@ -445,25 +452,26 @@
     });
 
     peer.on('error', (err) => {
-      alert("Peer Error: " + err.type);
-      goHome();
+      document.getElementById('createStatus').innerText = "Connection error. Retry!";
     });
   }
 
   function joinRoom() {
-    const code = document.getElementById('roomInput').value.trim().toUpperCase();
+    const code = document.getElementById('roomInput').value.trim();
     if(!code) return alert("Please enter a room code");
     
-    document.getElementById('joinStatus').innerText = 'Connecting to room...';
+    document.getElementById('joinStatus').innerText = "Connecting to room...";
 
+    if(peer) peer.destroy();
     peer = new Peer(peerConfig);
+
     peer.on('open', () => {
       conn = peer.connect(code, { reliable: true });
       setupP2PConnection();
     });
 
-    peer.on('error', () => {
-      document.getElementById('joinStatus').innerText = 'Room code not found or unreachable.';
+    peer.on('error', (err) => {
+      document.getElementById('joinStatus').innerText = "Room code invalid or unreachable.";
     });
   }
 
@@ -473,6 +481,7 @@
       document.getElementById('waitModal').classList.add('hidden');
       startMatch('p2p', 'Friend');
 
+      // Send starting state
       if(solution.length > 0) {
         conn.send({ type: 'START', sol: solution, init: initial, target: targetCells });
       }
@@ -489,7 +498,7 @@
         p2Completed = data.completed;
         p2Strikes = data.strikes;
         updateHeader();
-        if(p2Strikes >= 3) alert("🎉 Opponent got 3 strikes! You win!");
+        if(p2Strikes >= 3) alert("🎉 Opponent reached 3 strikes! You win!");
       } else if(data.type === 'FREEZE') {
         if(hasShield) {
           hasShield = false;
