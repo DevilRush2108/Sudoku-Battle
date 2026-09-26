@@ -2,221 +2,474 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Sudoku Battle 1v1</title>
-  <!-- PeerJS for Direct P2P Multiplayer -->
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <!-- Canvas Confetti -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Sudoku 1v1 Online Battle</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- MQTT.js over WSS for 100% Reliable Cross-Network Messaging (GitHub Pages Ready) -->
+  <script src="https://unpkg.com/mqtt@5.3.4/dist/mqtt.min.js"></script>
+
+  <!-- Canvas Confetti for Win Celebrations -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
   <!-- Google Fonts -->
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+
   <style>
-    :root {
-      --bg-main: #F5F5F7;
-      --card-bg: #FFFFFF;
-      --text-dark: #2B4C81;
-      --text-muted: #7A8CA8;
-      --grid-border: #3A4D6F;
-      --grid-thin: #D6E0EF;
-      --cell-bg: #FFFFFF;
-      --cell-focus: #8CA8F7;
-      --cell-same: #B9C9FF;
-      --cell-related: #EBF0FF;
-      --accent-blue: #3B82F6;
-      --accent-pink: #EC4899;
-      --accent-mint: #10B981;
-      --accent-red: #EF4444;
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #0F172A;
+      color: #F8FAFC;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
     }
 
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Plus Jakarta Sans', sans-serif; user-select: none; }
-    body { background-color: var(--bg-main); color: var(--text-dark); display: flex; justify-content: center; min-height: 100vh; padding: 12px; }
-    .app-container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 12px; }
+    .sudoku-board {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 1px;
+      background-color: #334155;
+      border: 3px solid #1E293B;
+      border-radius: 12px;
+      overflow: hidden;
+      aspect-ratio: 1;
+      box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+    }
 
-    header { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
-    .logo-title { font-size: 1.3rem; font-weight: 800; color: var(--text-dark); display: flex; align-items: center; gap: 6px; }
-    .header-actions { display: flex; align-items: center; gap: 8px; }
-    .home-btn { padding: 6px 12px; border-radius: 20px; border: 1px solid #CBD5E1; background: white; font-weight: 700; font-size: 0.8rem; color: var(--text-dark); cursor: pointer; display: flex; align-items: center; gap: 4px; }
-    .mode-badge { font-size: 0.75rem; font-weight: 700; background: #E2E8F0; color: var(--text-dark); padding: 4px 10px; border-radius: 20px; }
+    .cell {
+      background-color: #1E293B;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.25rem;
+      font-weight: 800;
+      color: #94A3B8;
+      cursor: pointer;
+      position: relative;
+      transition: all 0.12s ease;
+    }
 
-    .card { background: var(--card-bg); border-radius: 16px; padding: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); }
-    .btn { width: 100%; padding: 14px; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: transform 0.1s; display: flex; justify-content: center; align-items: center; gap: 8px; }
-    .btn:active { transform: scale(0.98); }
-    .btn-primary { background: var(--accent-blue); color: white; }
-    .btn-secondary { background: #EBF0FF; color: var(--text-dark); }
-    .btn-outline { border: 2px solid #D6E0EF; background: transparent; color: var(--text-dark); }
-
-    .sudoku-board { display: grid; grid-template-columns: repeat(9, 1fr); gap: 1px; background: var(--grid-thin); border: 2px solid var(--grid-border); border-radius: 8px; overflow: hidden; aspect-ratio: 1; }
-    .cell { background: var(--cell-bg); display: flex; justify-content: center; align-items: center; font-size: 1.4rem; font-weight: 700; color: var(--text-dark); cursor: pointer; position: relative; }
-    .cell:nth-child(3n) { border-right: 2px solid var(--grid-border); }
+    /* 3x3 Block Borders */
+    .cell:nth-child(3n) { border-right: 2px solid #475569; }
     .cell:nth-child(9n) { border-right: none; }
-    .cell-row-end { border-bottom: 2px solid var(--grid-border); }
-    
-    .cell.given { color: #1E293B; }
-    .cell.user-filled { color: var(--accent-blue); }
-    .cell.selected { background-color: var(--cell-focus) !important; color: white !important; }
-    .cell.same-num { background-color: var(--cell-same); }
-    .cell.related { background-color: var(--cell-related); }
-    .cell.incorrect { color: var(--accent-red); background-color: #FEE2E2; }
+    .cell-row-end { border-bottom: 2px solid #475569; }
 
-    .notes-grid { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; height: 100%; padding: 2px; }
-    .note-digit { font-size: 0.55rem; color: var(--text-muted); display: flex; justify-content: center; align-items: center; }
+    /* Cell States */
+    .cell.given { color: #F8FAFC; font-weight: 900; background-color: #0F172A; }
+    .cell.user-filled { color: #38BDF8; font-weight: 800; }
+    .cell.selected { background-color: #2563EB !important; color: #FFFFFF !important; }
+    .cell.same-num { background-color: #1E3A8A; color: #60A5FA; }
+    .cell.related { background-color: #172554; }
+    .cell.incorrect { color: #EF4444 !important; background-color: #450A0A !important; animation: shake 0.25s ease-in-out; }
 
-    .keypad { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
-    .key-btn { aspect-ratio: 1; border-radius: 12px; border: none; background: #FFFFFF; font-size: 1.3rem; font-weight: 700; color: var(--text-dark); box-shadow: 0 2px 8px rgba(0,0,0,0.06); cursor: pointer; }
-    .key-btn:active { background: #EBF0FF; }
+    .notes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      width: 100%;
+      height: 100%;
+      padding: 2px;
+    }
+    .note-digit {
+      font-size: 0.55rem;
+      color: #64748B;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      line-height: 1;
+    }
 
-    .action-bar { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-    .action-btn { flex: 1; padding: 8px; border-radius: 10px; border: 1px solid #D6E0EF; background: white; font-weight: 600; font-size: 0.8rem; color: var(--text-dark); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; }
-    .action-btn.active { background: var(--text-dark); color: white; }
+    .frozen-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(14, 116, 144, 0.85);
+      backdrop-filter: blur(6px);
+      z-index: 30;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-radius: 12px;
+      animation: fadeIn 0.2s ease-out;
+    }
 
-    .battle-header { display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 10px 14px; border-radius: 12px; margin-bottom: 10px; border: 1px solid #E2E8F0; }
-    .player-card { display: flex; flex-direction: column; gap: 2px; }
-    .player-name { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); }
-    .player-score { font-size: 1rem; font-weight: 800; color: var(--text-dark); }
-    .strikes { font-size: 0.75rem; color: var(--accent-red); font-weight: 700; }
-    .progress-bar-bg { width: 100%; height: 6px; background: #E2E8F0; border-radius: 3px; overflow: hidden; margin-top: 4px; }
-    .progress-bar-fill { height: 100%; background: var(--accent-blue); width: 0%; transition: width 0.3s; }
+    .fog-active .cell:not(.given) {
+      color: transparent !important;
+      background-color: #334155 !important;
+    }
 
-    .powerups { display: flex; gap: 8px; margin-top: 8px; }
-    .power-btn { flex: 1; padding: 10px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.8rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
-    .pw-freeze { background: #06B6D4; }
-    .pw-shield { background: var(--accent-mint); }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20%, 60% { transform: translateX(-4px); }
+      40%, 80% { transform: translateX(4px); }
+    }
 
-    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
-    .modal { background: white; width: 100%; max-width: 360px; border-radius: 20px; padding: 20px; text-align: center; display: flex; flex-direction: column; gap: 12px; }
-    .hidden { display: none !important; }
-
-    .frozen-screen { pointer-events: none; filter: blur(2px); opacity: 0.6; }
-    .status-msg { font-size: 0.8rem; color: var(--accent-blue); font-weight: 600; min-height: 20px; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: scale(0.97); }
+      to { opacity: 1; transform: scale(1); }
+    }
   </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col justify-between items-center p-3 sm:p-6 text-slate-100">
 
-<div class="app-container">
-  <header>
-    <div class="logo-title">🧩 Sudoku 1v1</div>
-    <div class="header-actions">
-      <button class="home-btn" id="homeBtn" onclick="goHome()">🏠 Home</button>
-      <div class="mode-badge" id="modeBadge">Menu</div>
+<div class="w-full max-w-md flex flex-col gap-3 my-auto">
+
+  <!-- Header Navbar -->
+  <header class="flex justify-between items-center bg-slate-900/90 p-3 sm:p-4 rounded-2xl border border-slate-800 shadow-lg backdrop-blur-md">
+    <div class="text-lg sm:text-xl font-extrabold text-white flex items-center gap-2">
+      <span class="text-2xl">🧩</span> Sudoku 1v1
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="confirmExit()" class="px-3 py-1.5 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 font-bold text-xs text-slate-300 transition-all flex items-center gap-1 active:scale-95">
+        🏠 Home
+      </button>
+      <span id="modeBadge" class="text-xs font-black bg-blue-600/30 text-blue-400 border border-blue-500/30 px-3 py-1.5 rounded-xl">Menu</span>
     </div>
   </header>
 
-  <!-- MAIN MENU -->
-  <div id="menuScreen" class="card" style="display:flex; flex-direction:column; gap:12px;">
-    <h2 style="text-align:center; margin-bottom:8px;">Select Mode</h2>
-    <button class="btn btn-primary" onclick="showRoomModal()">🎮 1v1 Online Private Room</button>
-    <button class="btn btn-secondary" onclick="startMatch('ai')">🤖 1v1 VS Adaptive AI</button>
-    <button class="btn btn-outline" onclick="startMatch('solo')">👤 Solo Practice Mode</button>
+  <!-- Notification Toast Bar -->
+  <div id="toast" class="hidden text-xs font-bold text-center py-2 px-4 rounded-xl transition-all shadow-md"></div>
+
+  <!-- MAIN MENU SCREEN -->
+  <div id="menuScreen" class="bg-slate-900/90 rounded-2xl p-6 border border-slate-800 shadow-xl flex flex-col gap-4 backdrop-blur-md">
+    <div class="text-center">
+      <h2 class="text-2xl font-black text-white tracking-tight">Sudoku Battle</h2>
+      <p class="text-xs text-slate-400 mt-1">Real-time 1v1 online multiplayer across any network</p>
+    </div>
+
+    <!-- Connection Indicator -->
+    <div class="flex items-center justify-center gap-2 bg-slate-950/60 py-2 px-3 rounded-xl border border-slate-800 text-xs">
+      <span id="netDot" class="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse"></span>
+      <span id="netStatus" class="font-bold text-slate-400">Connecting to Global Relay...</span>
+    </div>
+
+    <div class="flex flex-col gap-2.5 mt-1">
+      <button onclick="openCreateModal()" class="w-full py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-black rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-98 flex items-center justify-center gap-2 text-base">
+        ⚡ Create 1v1 Battle Room
+      </button>
+
+      <button onclick="openJoinModal()" class="w-full py-3.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-extrabold rounded-xl border border-slate-700 transition-all active:scale-98 flex items-center justify-center gap-2 text-sm">
+        🔑 Enter Room Code
+      </button>
+
+      <div class="relative flex py-1 items-center">
+        <div class="flex-grow border-t border-slate-800"></div>
+        <span class="flex-shrink mx-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Single Player</span>
+        <div class="flex-grow border-t border-slate-800"></div>
+      </div>
+
+      <button onclick="openDifficultyModal('ai')" class="w-full py-3 bg-indigo-950/60 hover:bg-indigo-900/60 text-indigo-300 border border-indigo-800/50 font-bold rounded-xl transition-all active:scale-98 flex items-center justify-center gap-2 text-xs">
+        🤖 Play vs Adaptive AI
+      </button>
+
+      <button onclick="openDifficultyModal('solo')" class="w-full py-3 bg-slate-950/60 hover:bg-slate-800/60 text-slate-400 border border-slate-800 font-bold rounded-xl transition-all active:scale-98 flex items-center justify-center gap-2 text-xs">
+        👤 Solo Practice Mode
+      </button>
+    </div>
   </div>
 
-  <!-- BATTLE SCREEN -->
-  <div id="gameScreen" class="hidden">
-    <!-- Battle Header -->
-    <div id="duelHeader" class="battle-header hidden">
-      <div class="player-card" style="width: 45%;">
-        <span class="player-name">YOU</span>
-        <span class="player-score" id="p1ProgressText">0 / 40</span>
-        <span class="strikes" id="p1Strikes">Strikes: ⚪⚪⚪</span>
-        <div class="progress-bar-bg"><div id="p1Progress" class="progress-bar-fill"></div></div>
+  <!-- BATTLE / GAME SCREEN -->
+  <div id="gameScreen" class="hidden flex-col gap-3">
+
+    <!-- Duel Header HUD -->
+    <div id="duelHeader" class="hidden justify-between items-center bg-slate-900/90 p-3 rounded-2xl border border-slate-800 shadow-md">
+      <!-- Player 1 -->
+      <div class="w-5/12 flex flex-col gap-1">
+        <div class="flex justify-between items-center">
+          <span class="text-[10px] font-black text-slate-400 tracking-wider">YOU</span>
+          <span id="p1CompletedText" class="text-xs font-black text-blue-400">0/40</span>
+        </div>
+        <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div id="p1ProgressBar" class="h-full bg-blue-500 w-0 transition-all duration-300"></div>
+        </div>
+        <div id="p1Strikes" class="text-[10px] font-bold text-red-400 flex gap-0.5">Strikes: ⚪⚪⚪</div>
       </div>
-      <span style="font-weight:800; color:var(--text-muted)">VS</span>
-      <div class="player-card" style="width: 45%; text-align: right;">
-        <span class="player-name" id="p2Name">OPPONENT</span>
-        <span class="player-score" id="p2ProgressText">0 / 40</span>
-        <span class="strikes" id="p2Strikes">Strikes: ⚪⚪⚪</span>
-        <div class="progress-bar-bg"><div id="p2Progress" class="progress-bar-fill" style="float:right; background:var(--accent-pink)"></div></div>
+
+      <!-- VS Badge -->
+      <div class="text-xs font-black text-slate-600 bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-800">VS</div>
+
+      <!-- Player 2 / AI -->
+      <div class="w-5/12 flex flex-col gap-1 items-end text-right">
+        <div class="flex justify-between items-center w-full">
+          <span id="p2CompletedText" class="text-xs font-black text-pink-400">0/40</span>
+          <span id="p2Name" class="text-[10px] font-black text-slate-400 tracking-wider uppercase">OPPONENT</span>
+        </div>
+        <div class="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+          <div id="p2ProgressBar" class="h-full bg-pink-500 w-0 transition-all duration-300 float-right"></div>
+        </div>
+        <div id="p2Strikes" class="text-[10px] font-bold text-red-400 flex gap-0.5">Strikes: ⚪⚪⚪</div>
       </div>
     </div>
 
-    <!-- Actions -->
-    <div class="action-bar">
-      <button class="action-btn" onclick="eraseCell()">🧹<span>Erase</span></button>
-      <button class="action-btn" id="notesBtn" onclick="toggleNotes()">✏️<span>Notes</span></button>
-      <button class="action-btn" onclick="useHint()">💡<span>Hint</span></button>
+    <!-- Action Toolbar -->
+    <div class="grid grid-cols-3 gap-2">
+      <button onclick="eraseCell()" class="py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+        🧹 Erase
+      </button>
+      <button id="notesBtn" onclick="toggleNotes()" class="py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+        ✏️ Notes
+      </button>
+      <button onclick="useHint()" class="py-2.5 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-slate-300 font-bold rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all">
+        💡 Hint
+      </button>
     </div>
 
-    <!-- Board -->
-    <div class="sudoku-board" id="board"></div>
+    <!-- Board Wrapper for Freeze & Fog Overlays -->
+    <div class="relative">
+      <!-- Frozen Attack Visual Overlay -->
+      <div id="frozenOverlay" class="hidden frozen-overlay">
+        <span class="text-4xl mb-2 animate-bounce">❄️</span>
+        <h3 class="text-lg font-black text-white">FROZEN!</h3>
+        <p class="text-xs text-cyan-200 mt-0.5 font-bold">Opponent froze your screen!</p>
+        <div class="mt-3 px-3 py-1 bg-cyan-950/80 border border-cyan-500/40 rounded-lg text-[11px] font-mono font-bold text-cyan-300" id="freezeTimerText">10s remaining</div>
+      </div>
 
-    <!-- Powerups -->
-    <div id="powerupBar" class="powerups hidden">
-      <button class="power-btn pw-freeze" onclick="usePowerup('freeze')">❄️ Freeze (10s)</button>
-      <button class="power-btn pw-shield" onclick="usePowerup('shield')">🛡️ Shield</button>
+      <!-- Sudoku Board Grid -->
+      <div id="board" class="sudoku-board"></div>
     </div>
 
-    <!-- Keypad -->
-    <div class="keypad">
-      <button class="key-btn" onclick="inputNumber(1)">1</button>
-      <button class="key-btn" onclick="inputNumber(2)">2</button>
-      <button class="key-btn" onclick="inputNumber(3)">3</button>
-      <button class="key-btn" onclick="inputNumber(4)">4</button>
-      <button class="key-btn" onclick="inputNumber(5)">5</button>
-      <button class="key-btn" onclick="inputNumber(6)">6</button>
-      <button class="key-btn" onclick="inputNumber(7)">7</button>
-      <button class="key-btn" onclick="inputNumber(8)">8</button>
-      <button class="key-btn" onclick="inputNumber(9)">9</button>
-      <button class="key-btn" style="background:#EBF0FF;" onclick="eraseCell()">⌫</button>
+    <!-- Attack Powerups Bar (In 1v1 Mode) -->
+    <div id="powerupBar" class="hidden grid-cols-3 gap-2 mt-0.5">
+      <button id="pwFreezeBtn" onclick="triggerPowerup('freeze')" class="py-2 bg-cyan-600 hover:bg-cyan-500 active:scale-95 text-white font-extrabold rounded-xl text-[11px] flex flex-col items-center justify-center shadow-md transition-all border border-cyan-400/30">
+        ❄️ Freeze (10s)
+        <span class="text-[9px] font-bold text-cyan-200" id="pwFreezeCost">1 Left</span>
+      </button>
+      <button id="pwFogBtn" onclick="triggerPowerup('fog')" class="py-2 bg-purple-600 hover:bg-purple-500 active:scale-95 text-white font-extrabold rounded-xl text-[11px] flex flex-col items-center justify-center shadow-md transition-all border border-purple-400/30">
+        🌫️ Fog (8s)
+        <span class="text-[9px] font-bold text-purple-200" id="pwFogCost">1 Left</span>
+      </button>
+      <button id="pwShieldBtn" onclick="triggerPowerup('shield')" class="py-2 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-extrabold rounded-xl text-[11px] flex flex-col items-center justify-center shadow-md transition-all border border-emerald-400/30">
+        🛡️ Shield
+        <span class="text-[9px] font-bold text-emerald-200" id="pwShieldStatus">Off</span>
+      </button>
+    </div>
+
+    <!-- Number Keypad -->
+    <div class="grid grid-cols-5 gap-2 mt-1">
+      <button onclick="inputNumber(1)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">1</button>
+      <button onclick="inputNumber(2)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">2</button>
+      <button onclick="inputNumber(3)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">3</button>
+      <button onclick="inputNumber(4)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">4</button>
+      <button onclick="inputNumber(5)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">5</button>
+      <button onclick="inputNumber(6)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">6</button>
+      <button onclick="inputNumber(7)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">7</button>
+      <button onclick="inputNumber(8)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">8</button>
+      <button onclick="inputNumber(9)" class="h-12 bg-slate-900 border border-slate-800 hover:bg-slate-800 active:scale-95 text-xl font-extrabold text-white rounded-xl shadow-md">9</button>
+      <button onclick="eraseCell()" class="h-12 bg-slate-800 border border-slate-700 hover:bg-slate-700 active:scale-95 text-lg font-bold text-slate-300 rounded-xl shadow-md">⌫</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- MODAL: CREATE ROOM WAITING -->
+<div id="createModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-4 z-50 hidden">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center flex flex-col items-center gap-4">
+    <div class="w-12 h-12 bg-blue-600/20 text-blue-400 rounded-2xl flex items-center justify-center text-2xl border border-blue-500/30">
+      🎮
+    </div>
+    <div>
+      <h3 class="text-lg font-black text-white">Room Created!</h3>
+      <p class="text-xs text-slate-400 mt-1">Share this 4-digit code with your friend:</p>
+    </div>
+
+    <!-- 4-Digit Display Code -->
+    <div id="roomCodeDisplay" class="text-3xl font-black text-blue-400 tracking-widest bg-slate-950 px-6 py-3 rounded-2xl border border-slate-800 font-mono">
+      ----
+    </div>
+
+    <div id="hostWaitStatus" class="text-xs font-extrabold text-amber-400 flex items-center gap-1.5">
+      <span class="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+      Waiting for opponent to enter code...
+    </div>
+
+    <div class="w-full flex gap-2 mt-1">
+      <button onclick="copyRoomCode()" class="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl text-xs transition-all">
+        📋 Copy Code
+      </button>
+      <button onclick="closeModal('createModal')" class="py-2.5 px-4 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold rounded-xl text-xs transition-all">
+        Cancel
+      </button>
     </div>
   </div>
 </div>
 
-<!-- ROOM MODAL -->
-<div id="roomModal" class="overlay hidden">
-  <div class="modal">
-    <h3>1v1 Private Room</h3>
-    <button class="btn btn-primary" onclick="createRoom()">Create Room</button>
-    <div style="font-size:0.8rem; color:var(--text-muted)">— OR —</div>
-    <input type="text" id="roomInput" placeholder="Enter Room Code" style="width:100%; padding:12px; border-radius:10px; border:1px solid #CBD5E1; text-align:center; font-weight:700; text-transform:uppercase;">
-    <button class="btn btn-secondary" onclick="joinRoom()">Join Room</button>
-    <div class="status-msg" id="joinStatus"></div>
-    <button class="btn btn-outline" onclick="closeRoomModal()">Cancel</button>
+<!-- MODAL: JOIN ROOM INPUT -->
+<div id="joinModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-4 z-50 hidden">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center flex flex-col items-center gap-4">
+    <div class="w-12 h-12 bg-indigo-600/20 text-indigo-400 rounded-2xl flex items-center justify-center text-2xl border border-indigo-500/30">
+      🔑
+    </div>
+    <div>
+      <h3 class="text-lg font-black text-white">Join 1v1 Room</h3>
+      <p class="text-xs text-slate-400 mt-1">Enter the 4-digit code from the host:</p>
+    </div>
+
+    <input type="number" id="joinCodeInput" maxlength="4" placeholder="4321" class="w-full py-3 bg-slate-950 border border-slate-800 rounded-xl text-center text-2xl font-mono font-black text-white tracking-widest focus:outline-none focus:border-blue-500">
+
+    <div id="joinStatusText" class="text-xs font-bold text-slate-400 min-h-[16px]"></div>
+
+    <div class="w-full flex gap-2">
+      <button onclick="submitJoinCode()" class="flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl text-xs transition-all active:scale-98 shadow-md">
+        Connect & Play
+      </button>
+      <button onclick="closeModal('joinModal')" class="py-3 px-4 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold rounded-xl text-xs transition-all">
+        Cancel
+      </button>
+    </div>
   </div>
 </div>
 
-<!-- WAITING MODAL -->
-<div id="waitModal" class="overlay hidden">
-  <div class="modal">
-    <h3>Waiting for Opponent</h3>
-    <p style="font-size:0.9rem; color:var(--text-muted)">Share this code with your friend:</p>
-    <h1 id="roomCodeDisplay" style="letter-spacing: 4px; color:var(--accent-blue);">Generating...</h1>
-    <div class="status-msg" id="createStatus">Connecting to PeerServer...</div>
-    <button class="btn btn-secondary" onclick="copyCode()">📋 Copy Code</button>
-    <button class="btn btn-outline" onclick="goHome()">Cancel</button>
+<!-- MODAL: DIFFICULTY SELECTOR -->
+<div id="difficultyModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex justify-center items-center p-4 z-50 hidden">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center flex flex-col gap-3">
+    <h3 class="text-lg font-black text-white" id="diffModalTitle">Select Difficulty</h3>
+    
+    <button onclick="selectDifficulty('easy')" class="py-3 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-800/50 text-emerald-300 font-black rounded-xl text-xs transition-all">
+      🟢 Easy (30 missing cells)
+    </button>
+    <button onclick="selectDifficulty('medium')" class="py-3 bg-amber-950/60 hover:bg-amber-900/60 border border-amber-800/50 text-amber-300 font-black rounded-xl text-xs transition-all">
+      🟡 Medium (42 missing cells)
+    </button>
+    <button onclick="selectDifficulty('hard')" class="py-3 bg-red-950/60 hover:bg-red-900/60 border border-red-800/50 text-red-300 font-black rounded-xl text-xs transition-all">
+      🔴 Hard (52 missing cells)
+    </button>
+
+    <button onclick="closeModal('difficultyModal')" class="py-2.5 bg-slate-950 hover:bg-slate-800 text-slate-400 font-bold rounded-xl text-xs transition-all mt-1">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<!-- MODAL: GAME OVER RESULT -->
+<div id="resultModal" class="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex justify-center items-center p-4 z-50 hidden">
+  <div class="bg-slate-900 border border-slate-800 w-full max-w-xs rounded-2xl p-6 shadow-2xl text-center flex flex-col items-center gap-4">
+    <div id="resEmoji" class="text-5xl animate-bounce">🏆</div>
+    <div>
+      <h3 id="resTitle" class="text-xl font-black text-white">Match Finished</h3>
+      <p id="resDesc" class="text-xs text-slate-400 mt-1">Great game!</p>
+    </div>
+
+    <div class="w-full flex flex-col gap-2">
+      <button id="rematchBtn" onclick="requestRematch()" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-extrabold rounded-xl text-xs transition-all shadow-md">
+        🔄 Play Again
+      </button>
+      <button onclick="goHome()" class="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl text-xs transition-all">
+        🏠 Back to Home
+      </button>
+    </div>
   </div>
 </div>
 
 <script>
+  // Game State Variables
   let board = [], solution = [], initial = [], notes = Array.from({length:81}, ()=>[]);
-  let selectedCell = null, isNotesMode = false, gameMode = 'solo';
-  let p1Completed = 0, p2Completed = 0, targetCells = 40;
+  let selectedCell = null, isNotesMode = false, gameMode = 'solo', difficulty = 'medium';
+  let p1Completed = 0, p2Completed = 0, totalEmptyCells = 40;
   let p1Strikes = 0, p2Strikes = 0;
-  let isFrozen = false, hasShield = false;
-  let peer = null, conn = null, aiTimer = null;
+  
+  // Powerups State
+  let freezeCount = 1, fogCount = 1, hasShield = false;
+  let isFrozen = false, isFogged = false, freezeTimer = null, fogTimer = null;
 
-  // WebRTC ICE STUN & TURN Servers Configuration
-  const peerConfig = {
-    config: {
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' },
-        { urls: 'stun:stun2.l.google.com:19302' },
-        { urls: 'stun:stun.services.mozilla.com' },
-        { urls: 'turn:openrelay.metered.ca:80', username: 'openrelay', credential: 'openrelay' },
-        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelay', credential: 'openrelay' }
-      ]
-    }
-  };
+  // Messaging / Networking State
+  let mqttClient = null;
+  let myPlayerId = 'P_' + Math.random().toString(36).substring(2, 8);
+  let currentRoomCode = null;
+  let isHost = false;
+  let aiInterval = null;
 
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  function playTone(freq, type="sine", duration=0.1) {
+  // Sound Synth Engine (Web Audio API)
+  const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  function playTone(freq, type="sine", duration=0.08) {
     try {
-      const osc = ctx.createOscillator();
-      const g = ctx.createGain();
-      osc.type = type; osc.frequency.value = freq;
-      osc.connect(g); g.connect(ctx.destination);
-      osc.start(); g.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + duration);
-      osc.stop(ctx.currentTime + duration);
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.00001, audioCtx.currentTime + duration);
+      osc.stop(audioCtx.currentTime + duration);
     } catch(e){}
+  }
+
+  // MQTT Relay Brokers (Auto-fallback array for 100% uptime on GitHub Pages)
+  const WSS_BROKERS = [
+    'wss://broker.emqx.io:8084/mqtt',
+    'wss://broker.hivemq.com:8004/mqtt',
+    'wss://test.mosquitto.org:8081/mqtt'
+  ];
+  let brokerIdx = 0;
+
+  function initMQTT() {
+    updateNetStatus("Connecting to Relay...", "amber");
+    
+    try {
+      mqttClient = mqtt.connect(WSS_BROKERS[brokerIdx], {
+        clientId: myPlayerId,
+        clean: true,
+        connectTimeout: 4000,
+        keepalive: 30
+      });
+
+      mqttClient.on('connect', () => {
+        updateNetStatus("Global Relay Connected", "emerald");
+      });
+
+      mqttClient.on('error', (err) => {
+        tryNextBroker();
+      });
+
+      mqttClient.on('close', () => {
+        updateNetStatus("Reconnecting...", "amber");
+      });
+
+      mqttClient.on('message', (topic, payload) => {
+        try {
+          const msg = JSON.parse(payload.toString());
+          if (msg.sender !== myPlayerId) {
+            handleIncomingMessage(msg);
+          }
+        } catch(e){}
+      });
+    } catch(e) {
+      tryNextBroker();
+    }
+  }
+
+  function tryNextBroker() {
+    brokerIdx = (brokerIdx + 1) % WSS_BROKERS.length;
+    if (mqttClient) {
+      try { mqttClient.end(true); } catch(e){}
+    }
+    setTimeout(initMQTT, 1000);
+  }
+
+  function updateNetStatus(text, color) {
+    const dot = document.getElementById('netDot');
+    const label = document.getElementById('netStatus');
+    label.innerText = text;
+    if (color === 'emerald') {
+      dot.className = "w-2.5 h-2.5 rounded-full bg-emerald-500";
+    } else if (color === 'amber') {
+      dot.className = "w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse";
+    } else {
+      dot.className = "w-2.5 h-2.5 rounded-full bg-red-500";
+    }
+  }
+
+  function showToast(text, isError = false) {
+    const toast = document.getElementById('toast');
+    toast.innerText = text;
+    toast.className = `text-xs font-extrabold text-center py-2 px-4 rounded-xl transition-all shadow-md ${
+      isError ? 'bg-red-950/90 text-red-300 border border-red-800' : 'bg-blue-950/90 text-blue-300 border border-blue-800'
+    }`;
+    toast.classList.remove('hidden');
+    setTimeout(() => toast.classList.add('hidden'), 3000);
   }
 
   function initBoard() {
@@ -231,8 +484,8 @@
     }
   }
 
-  function generateSudoku() {
-    const sol = [
+  function generateValidSudoku(diff = 'medium') {
+    const base = [
       5,3,4,6,7,8,9,1,2,
       6,7,2,1,9,5,3,4,8,
       1,9,8,3,4,2,5,6,7,
@@ -243,43 +496,23 @@
       2,8,7,4,1,9,6,3,5,
       3,4,5,2,8,6,1,7,9
     ];
+
+    // Permute digits randomly
+    const digitMap = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+    const sol = base.map(n => digitMap[n-1]);
+
     const init = [...sol];
-    let removed = 40;
-    targetCells = 40;
-    while(removed > 0) {
-      let idx = Math.floor(Math.random()*81);
-      if(init[idx] !== 0) { init[idx] = 0; removed--; }
+    let removeCount = diff === 'easy' ? 30 : diff === 'medium' ? 42 : 52;
+    totalEmptyCells = removeCount;
+
+    while(removeCount > 0) {
+      let idx = Math.floor(Math.random() * 81);
+      if(init[idx] !== 0) {
+        init[idx] = 0;
+        removeCount--;
+      }
     }
     return { sol, init };
-  }
-
-  function startMatch(mode, p2Name = "Opponent") {
-    gameMode = mode;
-    p1Completed = 0; p2Completed = 0;
-    p1Strikes = 0; p2Strikes = 0;
-    isFrozen = false; hasShield = false;
-
-    document.getElementById('menuScreen').classList.add('hidden');
-    document.getElementById('gameScreen').classList.remove('hidden');
-    document.getElementById('modeBadge').innerText = mode.toUpperCase();
-
-    if(mode !== 'p2p') {
-      const data = generateSudoku();
-      solution = data.sol; initial = [...data.init]; board = [...data.init];
-    }
-
-    if(mode !== 'solo') {
-      document.getElementById('duelHeader').classList.remove('hidden');
-      document.getElementById('powerupBar').classList.remove('hidden');
-      document.getElementById('p2Name').innerText = p2Name;
-    } else {
-      document.getElementById('duelHeader').classList.add('hidden');
-      document.getElementById('powerupBar').classList.add('hidden');
-    }
-
-    updateHeader();
-    renderBoard();
-    if(mode === 'ai') startAILogic();
   }
 
   function renderBoard() {
@@ -288,14 +521,14 @@
       cell.classList.remove('given', 'user-filled', 'selected', 'same-num', 'related', 'incorrect');
       cell.innerHTML = '';
 
-      if(initial[i] !== 0) {
+      if (initial[i] !== 0) {
         cell.classList.add('given');
         cell.innerText = initial[i];
-      } else if(board[i] !== 0) {
+      } else if (board[i] !== 0) {
         cell.classList.add('user-filled');
         cell.innerText = board[i];
-        if(board[i] !== solution[i]) cell.classList.add('incorrect');
-      } else if(notes[i].length > 0) {
+        if (board[i] !== solution[i]) cell.classList.add('incorrect');
+      } else if (notes[i].length > 0) {
         const grid = document.createElement('div');
         grid.className = 'notes-grid';
         for(let n=1; n<=9; n++) {
@@ -307,248 +540,406 @@
         cell.appendChild(grid);
       }
 
-      if(selectedCell === i) cell.classList.add('selected');
-      else if(selectedCell !== null) {
+      if (selectedCell === i) {
+        cell.classList.add('selected');
+      } else if (selectedCell !== null) {
         const selVal = board[selectedCell];
-        if(selVal !== 0 && board[i] === selVal) cell.classList.add('same-num');
+        if (selVal !== 0 && board[i] === selVal) cell.classList.add('same-num');
         const r1 = Math.floor(selectedCell/9), c1 = selectedCell%9;
         const r2 = Math.floor(i/9), c2 = i%9;
-        if(r1 === r2 || c1 === c2) cell.classList.add('related');
+        if (r1 === r2 || c1 === c2) cell.classList.add('related');
       }
     });
   }
 
   function selectCell(i) {
-    if(isFrozen) return;
+    if (isFrozen) return;
     selectedCell = i;
-    playTone(400, "sine", 0.05);
+    playTone(400, "sine", 0.04);
     renderBoard();
   }
 
   function inputNumber(num) {
-    if(selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
+    if (selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
 
-    if(isNotesMode) {
+    if (isNotesMode) {
       const arr = notes[selectedCell];
       const idx = arr.indexOf(num);
-      if(idx > -1) arr.splice(idx, 1);
+      if (idx > -1) arr.splice(idx, 1);
       else arr.push(num);
     } else {
+      const prevVal = board[selectedCell];
       board[selectedCell] = num;
-      if(num === solution[selectedCell]) {
-        playTone(600, "triangle", 0.1);
-        p1Completed++;
-        checkWin();
+
+      if (num === solution[selectedCell]) {
+        playTone(587, "triangle", 0.1); // D5 note
+        if (prevVal !== solution[selectedCell]) p1Completed++;
+        checkWinCondition();
       } else {
-        playTone(150, "sawtooth", 0.25);
+        playTone(160, "sawtooth", 0.2);
         p1Strikes++;
-        if(p1Strikes >= 3) {
-          updateHeader();
+        if (p1Strikes >= 3) {
+          updateHUD();
           renderBoard();
-          setTimeout(() => alert("❌ 3 Strikes! You lost the match!"), 100);
-          goHome();
+          finishGame(false, "You reached 3 strikes!");
           return;
         }
       }
-      syncP2P();
+      broadcastGameProgress();
     }
     renderBoard();
-    updateHeader();
+    updateHUD();
   }
 
   function eraseCell() {
-    if(selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
-    if(board[selectedCell] === solution[selectedCell]) p1Completed--;
+    if (selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
+    if (board[selectedCell] === solution[selectedCell]) p1Completed--;
     board[selectedCell] = 0;
     notes[selectedCell] = [];
     renderBoard();
-    updateHeader();
-    syncP2P();
+    updateHUD();
+    broadcastGameProgress();
   }
 
   function toggleNotes() {
     isNotesMode = !isNotesMode;
-    document.getElementById('notesBtn').classList.toggle('active', isNotesMode);
-  }
-
-  function useHint() {
-    if(selectedCell === null || initial[selectedCell] !== 0) return;
-    board[selectedCell] = solution[selectedCell];
-    p1Completed++;
-    renderBoard();
-    updateHeader();
-    checkWin();
-    syncP2P();
-  }
-
-  function formatStrikes(count) {
-    if(count === 0) return "Strikes: ⚪⚪⚪";
-    if(count === 1) return "Strikes: ❌⚪⚪";
-    if(count === 2) return "Strikes: ❌❌⚪";
-    return "Strikes: ❌❌❌";
-  }
-
-  function updateHeader() {
-    document.getElementById('p1ProgressText').innerText = `${p1Completed} / ${targetCells}`;
-    document.getElementById('p1Progress').style.width = `${(p1Completed/targetCells)*100}%`;
-    document.getElementById('p1Strikes').innerText = formatStrikes(p1Strikes);
-
-    document.getElementById('p2ProgressText').innerText = `${p2Completed} / ${targetCells}`;
-    document.getElementById('p2Progress').style.width = `${(p2Completed/targetCells)*100}%`;
-    document.getElementById('p2Strikes').innerText = formatStrikes(p2Strikes);
-  }
-
-  function usePowerup(type) {
-    if(type === 'freeze') {
-      if(conn && conn.open) conn.send({ type: 'FREEZE' });
-      else if(gameMode === 'ai') alert("Freeze powerup sent to AI!");
-    } else if(type === 'shield') {
-      hasShield = true;
-      alert("🛡️ Shield Active! Protected from the next Freeze attack.");
+    const btn = document.getElementById('notesBtn');
+    if (isNotesMode) {
+      btn.classList.add('bg-blue-600', 'text-white');
+      btn.classList.remove('bg-slate-900', 'text-slate-300');
+    } else {
+      btn.classList.remove('bg-blue-600', 'text-white');
+      btn.classList.add('bg-slate-900', 'text-slate-300');
     }
   }
 
+  function useHint() {
+    if (selectedCell === null || initial[selectedCell] !== 0 || isFrozen) return;
+    if (board[selectedCell] === solution[selectedCell]) return;
+
+    board[selectedCell] = solution[selectedCell];
+    p1Completed++;
+    playTone(800, "sine", 0.12);
+    renderBoard();
+    updateHUD();
+    checkWinCondition();
+    broadcastGameProgress();
+  }
+
+  function triggerPowerup(type) {
+    if (gameMode !== 'p2p' && gameMode !== 'ai') return;
+
+    if (type === 'freeze') {
+      if (freezeCount <= 0) return showToast("No Freeze powerups left!", true);
+      freezeCount--;
+      updatePowerupUI();
+      if (gameMode === 'p2p') {
+        sendMQTT({ type: 'ATTACK', attackType: 'FREEZE' });
+      } else if (gameMode === 'ai') {
+        showToast("❄️ Freeze powerup slowed down AI!");
+      }
+    } else if (type === 'fog') {
+      if (fogCount <= 0) return showToast("No Fog powerups left!", true);
+      fogCount--;
+      updatePowerupUI();
+      if (gameMode === 'p2p') {
+        sendMQTT({ type: 'ATTACK', attackType: 'FOG' });
+      } else if (gameMode === 'ai') {
+        showToast("🌫️ Fog powerup obscured AI vision!");
+      }
+    } else if (type === 'shield') {
+      hasShield = true;
+      updatePowerupUI();
+      showToast("🛡️ Active Shield! Protected from next attack.");
+    }
+  }
+
+  function updatePowerupUI() {
+    document.getElementById('pwFreezeCost').innerText = `${freezeCount} Left`;
+    document.getElementById('pwFogCost').innerText = `${fogCount} Left`;
+    document.getElementById('pwShieldStatus').innerText = hasShield ? "Active!" : "Off";
+    document.getElementById('pwShieldBtn').className = hasShield
+      ? "py-2 bg-emerald-500 ring-2 ring-emerald-300 text-white font-extrabold rounded-xl text-[11px] flex flex-col items-center justify-center shadow-md transition-all"
+      : "py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-[11px] flex flex-col items-center justify-center shadow-md transition-all opacity-80";
+  }
+
+  function receiveAttack(type) {
+    if (hasShield) {
+      hasShield = false;
+      updatePowerupUI();
+      playTone(900, "triangle", 0.2);
+      showToast("🛡️ Your Shield blocked an incoming attack!");
+      return;
+    }
+
+    if (type === 'FREEZE') {
+      isFrozen = true;
+      playTone(200, "sawtooth", 0.4);
+      document.getElementById('frozenOverlay').classList.remove('hidden');
+      let left = 10;
+      document.getElementById('freezeTimerText').innerText = `${left}s remaining`;
+      
+      if (freezeTimer) clearInterval(freezeTimer);
+      freezeTimer = setInterval(() => {
+        left--;
+        if (left <= 0) {
+          clearInterval(freezeTimer);
+          isFrozen = false;
+          document.getElementById('frozenOverlay').classList.add('hidden');
+        } else {
+          document.getElementById('freezeTimerText').innerText = `${left}s remaining`;
+        }
+      }, 1000);
+    } else if (type === 'FOG') {
+      isFogged = true;
+      playTone(180, "sawtooth", 0.3);
+      document.getElementById('board').classList.add('fog-active');
+      showToast("🌫️ Fog Attack! Grid obscured for 8s!", true);
+
+      if (fogTimer) clearTimeout(fogTimer);
+      fogTimer = setTimeout(() => {
+        isFogged = false;
+        document.getElementById('board').classList.remove('fog-active');
+      }, 8000);
+    }
+  }
+
+  function formatStrikes(count) {
+    if (count === 0) return "Strikes: ⚪⚪⚪";
+    if (count === 1) return "Strikes: ❌⚪⚪";
+    if (count === 2) return "Strikes: ❌❌⚪";
+    return "Strikes: ❌❌❌";
+  }
+
+  function updateHUD() {
+    document.getElementById('p1CompletedText').innerText = `${p1Completed}/${totalEmptyCells}`;
+    document.getElementById('p1ProgressBar').style.width = `${Math.min(100, (p1Completed/totalEmptyCells)*100)}%`;
+    document.getElementById('p1Strikes').innerText = formatStrikes(p1Strikes);
+
+    document.getElementById('p2CompletedText').innerText = `${p2Completed}/${totalEmptyCells}`;
+    document.getElementById('p2ProgressBar').style.width = `${Math.min(100, (p2Completed/totalEmptyCells)*100)}%`;
+    document.getElementById('p2Strikes').innerText = formatStrikes(p2Strikes);
+  }
+
+  function openCreateModal() {
+    if (!mqttClient || !mqttClient.connected) {
+      return showToast("Connecting to network relay, please try again in a second...", true);
+    }
+    isHost = true;
+    currentRoomCode = Math.floor(1000 + Math.random() * 9000).toString();
+    document.getElementById('roomCodeDisplay').innerText = currentRoomCode;
+    document.getElementById('createModal').classList.remove('hidden');
+
+    // Subscribe to Room Topic
+    mqttClient.subscribe(`sudoku1v1/room/${currentRoomCode}`);
+  }
+
+  function openJoinModal() {
+    if (!mqttClient || !mqttClient.connected) {
+      return showToast("Connecting to network relay, please try again in a second...", true);
+    }
+    isHost = false;
+    document.getElementById('joinCodeInput').value = '';
+    document.getElementById('joinStatusText').innerText = '';
+    document.getElementById('joinModal').classList.remove('hidden');
+  }
+
+  function submitJoinCode() {
+    const code = document.getElementById('joinCodeInput').value.trim();
+    if (code.length !== 4) return showToast("Please enter valid 4-digit code", true);
+
+    currentRoomCode = code;
+    document.getElementById('joinStatusText').innerText = "Connecting to room...";
+
+    // Subscribe to Room Topic and send Join Event
+    mqttClient.subscribe(`sudoku1v1/room/${currentRoomCode}`, () => {
+      sendMQTT({ type: 'JOIN_REQUEST' });
+    });
+  }
+
+  function sendMQTT(payload) {
+    if (mqttClient && mqttClient.connected && currentRoomCode) {
+      payload.sender = myPlayerId;
+      mqttClient.publish(`sudoku1v1/room/${currentRoomCode}`, JSON.stringify(payload));
+    }
+  }
+
+  function handleIncomingMessage(msg) {
+    if (msg.type === 'JOIN_REQUEST' && isHost) {
+      // Host generates puzzle and launches game for both
+      const puzzle = generateValidSudoku(difficulty);
+      solution = puzzle.sol; initial = [...puzzle.init]; board = [...puzzle.init];
+
+      sendMQTT({
+        type: 'START_GAME',
+        sol: solution,
+        init: initial,
+        diff: difficulty,
+        target: totalEmptyCells
+      });
+
+      closeModal('createModal');
+      launchMatch('p2p', 'Friend');
+    } else if (msg.type === 'START_GAME' && !isHost) {
+      solution = msg.sol;
+      initial = [...msg.init];
+      board = [...msg.init];
+      difficulty = msg.diff;
+      totalEmptyCells = msg.target;
+
+      closeModal('joinModal');
+      launchMatch('p2p', 'Friend');
+    } else if (msg.type === 'SYNC_PROGRESS') {
+      p2Completed = msg.completed;
+      p2Strikes = msg.strikes;
+      updateHUD();
+      if (p2Strikes >= 3) {
+        finishGame(true, "Opponent lost with 3 strikes!");
+      }
+    } else if (msg.type === 'ATTACK') {
+      receiveAttack(msg.attackType);
+    } else if (msg.type === 'MATCH_WIN') {
+      finishGame(false, "Opponent completed the board first!");
+    } else if (msg.type === 'REMATCH_REQ') {
+      showToast("Opponent requested a rematch!");
+    }
+  }
+
+  function copyRoomCode() {
+    const code = document.getElementById('roomCodeDisplay').innerText;
+    navigator.clipboard.writeText(code);
+    showToast("Room Code copied to clipboard!");
+  }
+
+  function openDifficultyModal(mode) {
+    gameMode = mode;
+    document.getElementById('diffModalTitle').innerText = mode === 'ai' ? "AI Difficulty" : "Select Difficulty";
+    document.getElementById('difficultyModal').classList.remove('hidden');
+  }
+
+  function selectDifficulty(diff) {
+    difficulty = diff;
+    closeModal('difficultyModal');
+    const puzzle = generateValidSudoku(difficulty);
+    solution = puzzle.sol; initial = [...puzzle.init]; board = [...puzzle.init];
+
+    if (gameMode === 'ai') launchMatch('ai', 'Robot AI');
+    else launchMatch('solo');
+  }
+
+  function launchMatch(mode, p2Name = "Opponent") {
+    gameMode = mode;
+    p1Completed = 0; p2Completed = 0;
+    p1Strikes = 0; p2Strikes = 0;
+    freezeCount = 1; fogCount = 1; hasShield = false;
+    isFrozen = false; isFogged = false;
+
+    document.getElementById('menuScreen').classList.add('hidden');
+    document.getElementById('gameScreen').classList.remove('hidden');
+    document.getElementById('gameScreen').classList.add('flex');
+    document.getElementById('modeBadge').innerText = mode.toUpperCase();
+
+    if (mode !== 'solo') {
+      document.getElementById('duelHeader').classList.remove('hidden');
+      document.getElementById('duelHeader').classList.add('flex');
+      document.getElementById('powerupBar').classList.remove('hidden');
+      document.getElementById('powerupBar').classList.add('grid');
+      document.getElementById('p2Name').innerText = p2Name;
+    } else {
+      document.getElementById('duelHeader').classList.add('hidden');
+      document.getElementById('powerupBar').classList.add('hidden');
+    }
+
+    updatePowerupUI();
+    updateHUD();
+    renderBoard();
+
+    if (mode === 'ai') startAILogic();
+  }
+
+  function broadcastGameProgress() {
+    if (gameMode === 'p2p') {
+      sendMQTT({ type: 'SYNC_PROGRESS', completed: p1Completed, strikes: p1Strikes });
+    }
+  }
+
+  function startAILogic() {
+    if (aiInterval) clearInterval(aiInterval);
+    const speed = difficulty === 'easy' ? 4800 : difficulty === 'medium' ? 3800 : 2800;
+
+    aiInterval = setInterval(() => {
+      if (gameMode === 'ai' && p2Completed < totalEmptyCells) {
+        p2Completed++;
+        updateHUD();
+        if (p2Completed >= totalEmptyCells) {
+          finishGame(false, "🤖 AI completed the board first!");
+        }
+      }
+    }, speed);
+  }
+
+  function checkWinCondition() {
+    if (p1Completed >= totalEmptyCells) {
+      if (gameMode === 'p2p') sendMQTT({ type: 'MATCH_WIN' });
+      finishGame(true, "🎉 You completed the Sudoku first!");
+    }
+  }
+
+  function finishGame(isVictory, desc) {
+    if (aiInterval) clearInterval(aiInterval);
+
+    document.getElementById('resEmoji').innerText = isVictory ? "🏆" : "❌";
+    document.getElementById('resTitle').innerText = isVictory ? "VICTORY!" : "GAME OVER";
+    document.getElementById('resDesc').innerText = desc;
+    document.getElementById('resultModal').classList.remove('hidden');
+
+    if (isVictory) {
+      playTone(523, "triangle", 0.15);
+      setTimeout(() => playTone(659, "triangle", 0.15), 150);
+      setTimeout(() => playTone(783, "triangle", 0.3), 300);
+      confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+    }
+  }
+
+  function requestRematch() {
+    closeModal('resultModal');
+    if (gameMode === 'p2p') {
+      sendMQTT({ type: 'REMATCH_REQ' });
+      showToast("Rematch request sent!");
+    } else {
+      const puzzle = generateValidSudoku(difficulty);
+      solution = puzzle.sol; initial = [...puzzle.init]; board = [...puzzle.init];
+      launchMatch(gameMode, gameMode === 'ai' ? 'Robot AI' : 'Opponent');
+    }
+  }
+
+  function confirmExit() {
+    goHome();
+  }
+
   function goHome() {
-    if(aiTimer) clearInterval(aiTimer);
-    if(conn) { conn.close(); conn = null; }
-    if(peer) { peer.destroy(); peer = null; }
+    if (aiInterval) clearInterval(aiInterval);
+    if (freezeTimer) clearInterval(freezeTimer);
+    if (fogTimer) clearTimeout(fogTimer);
 
     document.getElementById('gameScreen').classList.add('hidden');
-    document.getElementById('roomModal').classList.add('hidden');
-    document.getElementById('waitModal').classList.add('hidden');
+    document.getElementById('gameScreen').classList.remove('flex');
+    closeModal('createModal');
+    closeModal('joinModal');
+    closeModal('difficultyModal');
+    closeModal('resultModal');
     document.getElementById('menuScreen').classList.remove('hidden');
     document.getElementById('modeBadge').innerText = "Menu";
   }
 
-  // PEERJS MULTIPLAYER
-  function showRoomModal() { 
-    document.getElementById('joinStatus').innerText = '';
-    document.getElementById('roomModal').classList.remove('hidden'); 
-  }
-  function closeRoomModal() { document.getElementById('roomModal').classList.add('hidden'); }
-
-  function createRoom() {
-    closeRoomModal();
-    document.getElementById('roomCodeDisplay').innerText = "------";
-    document.getElementById('createStatus').innerText = "Connecting to server...";
-    document.getElementById('waitModal').classList.remove('hidden');
-
-    const data = generateSudoku();
-    solution = data.sol; initial = [...data.init]; board = [...data.init];
-
-    // Destroy existing peer connection if any
-    if(peer) peer.destroy();
-
-    peer = new Peer(peerConfig);
-
-    peer.on('open', (id) => {
-      document.getElementById('roomCodeDisplay').innerText = id.substring(0,6).toUpperCase();
-      document.getElementById('createStatus').innerText = "Waiting for opponent to join...";
-    });
-
-    peer.on('connection', (c) => {
-      conn = c;
-      setupP2PConnection();
-    });
-
-    peer.on('error', (err) => {
-      document.getElementById('createStatus').innerText = "Connection error. Retry!";
-    });
+  function closeModal(id) {
+    document.getElementById(id).classList.add('hidden');
   }
 
-  function joinRoom() {
-    const code = document.getElementById('roomInput').value.trim();
-    if(!code) return alert("Please enter a room code");
-    
-    document.getElementById('joinStatus').innerText = "Connecting to room...";
-
-    if(peer) peer.destroy();
-    peer = new Peer(peerConfig);
-
-    peer.on('open', () => {
-      conn = peer.connect(code, { reliable: true });
-      setupP2PConnection();
-    });
-
-    peer.on('error', (err) => {
-      document.getElementById('joinStatus').innerText = "Room code invalid or unreachable.";
-    });
-  }
-
-  function setupP2PConnection() {
-    conn.on('open', () => {
-      closeRoomModal();
-      document.getElementById('waitModal').classList.add('hidden');
-      startMatch('p2p', 'Friend');
-
-      // Send starting state
-      if(solution.length > 0) {
-        conn.send({ type: 'START', sol: solution, init: initial, target: targetCells });
-      }
-    });
-
-    conn.on('data', (data) => {
-      if(data.type === 'START') {
-        solution = data.sol; initial = [...data.init]; board = [...data.init];
-        targetCells = data.target;
-        closeRoomModal();
-        document.getElementById('waitModal').classList.add('hidden');
-        startMatch('p2p', 'Friend');
-      } else if(data.type === 'SYNC') {
-        p2Completed = data.completed;
-        p2Strikes = data.strikes;
-        updateHeader();
-        if(p2Strikes >= 3) alert("🎉 Opponent reached 3 strikes! You win!");
-      } else if(data.type === 'FREEZE') {
-        if(hasShield) {
-          hasShield = false;
-          alert("🛡️ Your Shield blocked a Freeze attack!");
-        } else {
-          isFrozen = true;
-          document.getElementById('board').classList.add('frozen-screen');
-          setTimeout(() => {
-            isFrozen = false;
-            document.getElementById('board').classList.remove('frozen-screen');
-          }, 10000);
-        }
-      }
-    });
-
-    conn.on('close', () => {
-      alert("Opponent disconnected.");
-      goHome();
-    });
-  }
-
-  function syncP2P() {
-    if(conn && conn.open) conn.send({ type: 'SYNC', completed: p1Completed, strikes: p1Strikes });
-  }
-
-  function copyCode() {
-    const code = document.getElementById('roomCodeDisplay').innerText;
-    navigator.clipboard.writeText(code);
-    alert("Room code copied!");
-  }
-
-  function startAILogic() {
-    if(aiTimer) clearInterval(aiTimer);
-    aiTimer = setInterval(() => {
-      if(gameMode === 'ai' && p2Completed < targetCells) {
-        p2Completed++;
-        updateHeader();
-        if(p2Completed >= targetCells) alert("🤖 AI completed the board first!");
-      }
-    }, 4500);
-  }
-
-  function checkWin() {
-    if(p1Completed >= targetCells) {
-      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      alert("🎉 Victory! You completed the Sudoku first!");
-    }
-  }
-
-  initBoard();
+  window.onload = () => {
+    initBoard();
+    initMQTT();
+  };
 </script>
 </body>
 </html>
