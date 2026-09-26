@@ -181,6 +181,17 @@
   let isFrozen = false, hasShield = false;
   let peer = null, conn = null;
 
+  // Configuration for ICE/STUN servers to bypass mobile firewalls
+  const peerConfig = {
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' }
+      ]
+    }
+  };
+
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   function playTone(freq, type="sine", duration=0.1) {
     try {
@@ -364,15 +375,10 @@
     const data = generateSudoku();
     solution = data.sol; initial = [...data.init]; board = [...data.init];
 
-    peer = new Peer(code);
+    peer = new Peer(code, peerConfig);
     peer.on('connection', (c) => {
       conn = c;
       setupP2PConnection();
-      document.getElementById('waitModal').classList.add('hidden');
-      startMatch('p2p', 'Friend');
-      setTimeout(() => {
-        conn.send({ type: 'START', sol: solution, init: initial });
-      }, 500);
     });
   }
 
@@ -381,14 +387,24 @@
     if(!code) return alert("Please enter a room code");
     closeRoomModal();
 
-    peer = new Peer();
+    peer = new Peer(peerConfig);
     peer.on('open', () => {
-      conn = peer.connect(code);
+      conn = peer.connect(code, { reliable: true });
       setupP2PConnection();
     });
   }
 
   function setupP2PConnection() {
+    conn.on('open', () => {
+      document.getElementById('waitModal').classList.add('hidden');
+      startMatch('p2p', 'Friend');
+
+      // Send puzzle payload to joining device
+      if(solution.length > 0) {
+        conn.send({ type: 'START', sol: solution, init: initial });
+      }
+    });
+
     conn.on('data', (data) => {
       if(data.type === 'START') {
         solution = data.sol; initial = [...data.init]; board = [...data.init];
