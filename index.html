@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>1v1 Sudoku Battle Royale</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        theme: {
+                            bg: '#f2f4f8',
+                            cardBg: '#ffffff',
+                            cardBorder: '#dbe1eb',
+                            textDark: '#1e293b',
+                            textNav: '#2a3b5e',
+                            navy: '#203254',
+                            activeBlue: '#8ca8f7',
+                            highlightBlue: '#b9c9ff',
+                            faintBlue: '#ebf0ff',
+                            softGray: '#f8fafc',
+                            accentPink: '#f43f5e',
+                            accentGreen: '#10b981',
+                            accentAmber: '#f59e0b',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Plus Jakarta Sans', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'soft': '0 4px 20px -2px rgba(30, 41, 59, 0.05)',
+                        'card': '0 10px 30px -5px rgba(32, 50, 84, 0.08)',
+                        'glow-blue': '0 0 20px rgba(140, 168, 247, 0.4)',
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            background-color: #f2f4f8;
+            color: #1e293b;
+        }
+
+        /* 3x3 Sudoku Subgrid Borders matching reference */
+        .sudoku-cell {
+            position: relative;
+            aspect-ratio: 1 / 1;
+            transition: background-color 0.12s ease, transform 0.1s ease;
+        }
+
+        .sudoku-cell:nth-child(3n) {
+            border-right-width: 2.5px !important;
+            border-right-color: #1e293b !important;
+        }
+        .sudoku-cell:nth-child(9n) {
+            border-right-width: 0px !important;
+        }
+        .sudoku-row:nth-child(3n) .sudoku-cell {
+            border-bottom-width: 2.5px !important;
+            border-bottom-color: #1e293b !important;
+        }
+        .sudoku-row:nth-child(9) .sudoku-cell {
+            border-bottom-width: 0px !important;
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            60% { transform: scale(1.1); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pop-in {
+            animation: popIn 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes pulseFreeze {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 0.8; }
+        }
+
+        .frozen-overlay {
+            animation: pulseFreeze 1s infinite ease-in-out;
+        }
+
+        #confetti-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            pointer-events: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden antialiased">
+
+    <script>
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playTap() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(580, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.04);
+                gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.04);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.04);
+            }
+
+            playSuccess() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(523.25, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(659.25, this.ctx.currentTime + 0.07);
+                osc.frequency.setValueAtTime(783.99, this.ctx.currentTime + 0.14);
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.28);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.28);
+            }
+
+            playError() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(120, this.ctx.currentTime + 0.18);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.18);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.18);
+            }
+
+            playPowerup() {
+                if (!this.enabled) return;
+                this.init();
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(960, this.ctx.currentTime + 0.22);
+                gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.22);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.22);
+            }
+
+            playVictory() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.18, now + i * 0.1);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.1 + 0.28);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + i * 0.1);
+                    osc.stop(now + i * 0.1 + 0.28);
+                });
+            }
+        }
+
+        const soundFX = new SoundEngine();
+    </script>
+
+    <canvas id="confetti-canvas"></canvas>
+
+    <header class="bg-white/80 backdrop-blur-md border-b border-theme-cardBorder sticky top-0 z-30 px-4 py-2.5 shadow-sm">
+        <div class="max-w-md mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-2.5">
+                <div class="w-9 h-9 rounded-xl bg-theme-navy text-white flex items-center justify-center shadow-md">
+                    <i class="fa-solid fa-table-cells text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-extrabold text-base tracking-tight text-theme-navy flex items-center gap-1">
+                        SUDOKU <span class="text-blue-600 font-black">BATTLE</span>
+                    </h1>
+                    <p id="header-mode-title" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">1v1 Online Arena</p>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <button id="btn-sound-toggle" onclick="toggleSound()" class="w-8 h-8 rounded-lg bg-theme-softGray border border-slate-200 hover:bg-slate-200/60 flex items-center justify-center text-slate-600 transition-all">
+                    <i id="icon-sound" class="fa-solid fa-volume-high text-xs"></i>
+                </button>
+                <button onclick="openMenuModal()" class="w-8 h-8 rounded-lg bg-theme-softGray border border-slate-200 hover:bg-slate-200/60 flex items-center justify-center text-slate-600 transition-all">
+                    <i class="fa-solid fa-bars text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-md w-full mx-auto px-3 py-2 flex flex-col justify-between space-y-2.5">
+
+        <!-- 1v1 BATTLE HUD HEADER -->
+        <section id="hud-battle" class="bg-white border border-theme-cardBorder rounded-2xl p-3 shadow-card relative overflow-hidden">
+            <div class="flex items-center justify-between gap-2">
+                <!-- Player 1 Profile -->
+                <div class="flex items-center gap-2 w-5/12">
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-100 p-0.5 border border-indigo-200">
+                            <img id="p1-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=YouPlayer" class="w-full h-full bg-white rounded-lg" alt="You">
+                        </div>
+                        <span class="absolute -bottom-1 -right-1 bg-emerald-500 text-[8px] font-black text-white px-1 rounded-full border border-white">YOU</span>
+                    </div>
+                    <div class="overflow-hidden">
+                        <div id="p1-name" class="text-xs font-extrabold text-slate-800 truncate">You</div>
+                        <div class="text-xs font-black text-blue-600"><span id="p1-score">0</span> <span class="text-[9px] text-slate-400 font-semibold">pts</span></div>
+                    </div>
+                </div>
+
+                <!-- Match Timer & VS Badge -->
+                <div class="flex flex-col items-center justify-center w-2/12">
+                    <div class="px-2 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-black text-slate-700 flex items-center gap-1">
+                        <i class="fa-solid fa-clock text-[9px] text-amber-500"></i>
+                        <span id="game-timer">00:00</span>
+                    </div>
+                    <span class="text-[10px] font-black italic text-blue-600 mt-0.5">VS</span>
+                </div>
+
+                <!-- Opponent Profile -->
+                <div class="flex items-center justify-end gap-2 w-5/12 text-right">
+                    <div class="overflow-hidden">
+                        <div id="opp-name" class="text-xs font-extrabold text-slate-800 truncate">Opponent</div>
+                        <div class="text-xs font-black text-rose-500"><span id="p2-score">0</span> <span class="text-[9px] text-slate-400 font-semibold">pts</span></div>
+                    </div>
+                    <div class="relative">
+                        <div class="w-10 h-10 rounded-xl bg-rose-100 p-0.5 border border-rose-200">
+                            <img id="opp-avatar" src="https://api.dicebear.com/7.x/bottts/svg?seed=BotAlpha" class="w-full h-full bg-white rounded-lg" alt="Opponent">
+                        </div>
+                        <span id="opp-status-badge" class="absolute -bottom-1 -left-1 bg-amber-500 text-[8px] font-black text-white px-1 rounded-full border border-white uppercase">BOT</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dual Progress Bars -->
+            <div class="mt-2.5 grid grid-cols-2 gap-2 relative">
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-0.5 text-slate-600">
+                        <span>Your Progress</span>
+                        <span id="p1-progress-pct">0%</span>
+                    </div>
+                    <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                        <div id="p1-progress-bar" class="h-full bg-gradient-to-r from-blue-500 to-indigo-600 rounded-full transition-all duration-300 w-0"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="flex justify-between text-[10px] font-bold mb-0.5 text-slate-600">
+                        <span id="p2-progress-pct">0%</span>
+                        <span>Opponent</span>
+                    </div>
+                    <div class="h-2 w-full bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                        <div id="p2-progress-bar" class="h-full bg-gradient-to-r from-rose-400 to-rose-600 rounded-full transition-all duration-300 w-0 ml-auto"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Mistakes Strikes & Room Code Badge -->
+            <div class="mt-2 pt-1.5 border-t border-slate-100 flex justify-between items-center text-xs">
+                <div class="flex items-center gap-1.5 text-slate-500 text-[11px] font-bold">
+                    <span>Strikes:</span>
+                    <div id="mistakes-container" class="flex gap-1 text-rose-500">
+                        <i class="fa-solid fa-xmark opacity-25"></i>
+                        <i class="fa-solid fa-xmark opacity-25"></i>
+                        <i class="fa-solid fa-xmark opacity-25"></i>
+                    </div>
+                </div>
+                
+                <div id="room-code-badge" class="hidden text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 border border-blue-200 flex items-center gap-1">
+                    <i class="fa-solid fa-key text-[9px]"></i>
+                    ROOM: <span id="active-room-id" class="text-blue-900 font-mono uppercase">------</span>
+                </div>
+
+                <div id="streak-badge" class="hidden text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-200 animate-pulse">
+                    🔥 STREAK x<span id="streak-count">1</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- SOLO PRACTICE HUD -->
+        <section id="hud-solo" class="hidden bg-white border border-theme-cardBorder rounded-2xl p-3 shadow-card flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span id="solo-diff-badge" class="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 font-extrabold text-xs">EASY</span>
+                <div class="text-xs text-slate-500 font-bold">Score: <span id="solo-score" class="font-extrabold text-slate-800">0</span></div>
+            </div>
+            <div class="flex items-center gap-3">
+                <div class="text-xs font-mono font-black text-slate-700 bg-slate-100 px-2.5 py-1 rounded-lg border border-slate-200" id="solo-timer">00:00</div>
+                <div id="solo-mistakes" class="text-xs text-rose-500 font-extrabold">Mistakes: 0/3</div>
+            </div>
+        </section>
+
+        <!-- POWER-UP ACTION BUTTONS -->
+        <div id="powerups-container" class="grid grid-cols-3 gap-2">
+            <button onclick="usePowerup('freeze')" id="pw-freeze" class="bg-white hover:bg-cyan-50 border border-cyan-200 p-2 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40 shadow-sm">
+                <i class="fa-solid fa-snowflake text-cyan-500 text-sm"></i>
+                <div class="text-left">
+                    <div class="text-[10px] font-black text-slate-800 leading-none">FREEZE</div>
+                    <div class="text-[8px] font-bold text-cyan-600">Stun Opponent 4s</div>
+                </div>
+            </button>
+
+            <button onclick="usePowerup('hint')" id="pw-hint" class="bg-white hover:bg-amber-50 border border-amber-200 p-2 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40 shadow-sm">
+                <i class="fa-solid fa-lightbulb text-amber-500 text-sm"></i>
+                <div class="text-left">
+                    <div class="text-[10px] font-black text-slate-800 leading-none">AUTO HINT</div>
+                    <div class="text-[8px] font-bold text-amber-600">Solve 1 Cell</div>
+                </div>
+            </button>
+
+            <button onclick="usePowerup('shield')" id="pw-shield" class="bg-white hover:bg-pink-50 border border-pink-200 p-2 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 disabled:opacity-40 shadow-sm">
+                <i class="fa-solid fa-shield-halved text-pink-500 text-sm"></i>
+                <div class="text-left">
+                    <div class="text-[10px] font-black text-slate-800 leading-none">SHIELD</div>
+                    <div class="text-[8px] font-bold text-pink-600">Block 1 Strike</div>
+                </div>
+            </button>
+        </div>
+
+        <div class="relative w-full aspect-square max-w-[400px] mx-auto bg-white p-2 rounded-2xl shadow-card border-2 border-slate-800">
+            <div id="board-frozen-overlay" class="hidden absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] rounded-xl z-20 flex flex-col items-center justify-center gap-2 frozen-overlay">
+                <i class="fa-solid fa-snowflake text-5xl text-cyan-200 animate-spin"></i>
+                <span class="text-xs font-black tracking-widest text-white uppercase bg-slate-900/80 px-3 py-1 rounded-full">You Are Frozen!</span>
+            </div>
+
+            <div id="sudoku-grid" class="w-full h-full grid grid-rows-9 gap-0 border-2 border-slate-800 rounded-lg overflow-hidden bg-white">
+                <!-- Grid Cells populated by JS -->
+            </div>
+        </div>
+
+        <!-- ACTION TOOLBAR -->
+        <div class="grid grid-cols-4 gap-2">
+            <button onclick="actionUndo()" class="bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 p-2 rounded-xl flex flex-col items-center justify-center shadow-sm transition-all">
+                <i class="fa-solid fa-rotate-left text-xs mb-0.5"></i>
+                <span class="text-[10px] font-bold">Undo</span>
+            </button>
+
+            <button onclick="actionErase()" class="bg-white hover:bg-slate-50 active:bg-slate-100 border border-slate-200 text-slate-700 p-2 rounded-xl flex flex-col items-center justify-center shadow-sm transition-all">
+                <i class="fa-solid fa-eraser text-xs mb-0.5"></i>
+                <span class="text-[10px] font-bold">Erase</span>
+            </button>
+
+            <button id="btn-notes" onclick="toggleNotesMode()" class="bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 p-2 rounded-xl flex flex-col items-center justify-center shadow-sm transition-all relative">
+                <i id="icon-notes" class="fa-solid fa-pencil text-xs mb-0.5"></i>
+                <span class="text-[10px] font-bold">Notes</span>
+                <span id="badge-notes" class="absolute top-1 right-2 text-[8px] font-black px-1 rounded bg-slate-200 text-slate-600">OFF</span>
+            </button>
+
+            <button onclick="actionHint()" class="bg-white hover:bg-amber-50 border border-slate-200 text-amber-600 p-2 rounded-xl flex flex-col items-center justify-center shadow-sm transition-all">
+                <i class="fa-regular fa-lightbulb text-xs mb-0.5"></i>
+                <span class="text-[10px] font-bold">Hint</span>
+            </button>
+        </div>
+
+        <div class="grid grid-cols-9 gap-1 pt-1">
+            <button onclick="inputDigit(1)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">1</button>
+            <button onclick="inputDigit(2)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">2</button>
+            <button onclick="inputDigit(3)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">3</button>
+            <button onclick="inputDigit(4)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">4</button>
+            <button onclick="inputDigit(5)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">5</button>
+            <button onclick="inputDigit(6)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">6</button>
+            <button onclick="inputDigit(7)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">7</button>
+            <button onclick="inputDigit(8)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">8</button>
+            <button onclick="inputDigit(9)" class="bg-white hover:bg-blue-50 active:scale-95 text-theme-navy font-black text-xl py-3 rounded-xl border border-slate-200 shadow-sm transition-all flex items-center justify-center">9</button>
+        </div>
+
+    </main>
+
+    <!-- PRIVATE ROOM LOBBY / SETUP MODAL -->
+    <div id="modal-private-room" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden">
+            
+            <!-- CREATE ROOM STATE -->
+            <div id="room-state-create" class="space-y-4">
+                <div class="w-14 h-14 mx-auto rounded-2xl bg-blue-50 text-blue-600 border border-blue-200 flex items-center justify-center text-2xl">
+                    <i class="fa-solid fa-users text-2xl"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-black text-slate-800">1v1 ONLINE ROOM</h3>
+                    <p class="text-xs text-slate-500 mt-0.5">Play Sudoku head-to-head with a friend</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-2">
+                    <button onclick="createOnlineRoom()" class="p-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl transition-all flex flex-col items-center gap-1 shadow-md shadow-blue-600/20">
+                        <i class="fa-solid fa-plus-circle text-lg"></i>
+                        <span>Create Room</span>
+                    </button>
+                    <button onclick="showJoinRoomInput()" class="p-3.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs rounded-2xl border border-slate-200 transition-all flex flex-col items-center gap-1">
+                        <i class="fa-solid fa-right-to-bracket text-lg"></i>
+                        <span>Join Room</span>
+                    </button>
+                </div>
+
+                <!-- JOIN ROOM INPUT BOX -->
+                <div id="join-input-section" class="hidden space-y-3 pt-2 text-left">
+                    <label class="text-[11px] font-bold text-slate-600">Enter 6-Digit Room Code:</label>
+                    <div class="flex gap-2">
+                        <input id="input-room-code" type="text" maxlength="6" placeholder="e.g. A8X9K2" class="w-full bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-center uppercase font-mono font-bold text-slate-800 tracking-widest focus:outline-none focus:border-blue-500">
+                        <button onclick="joinOnlineRoom()" class="px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl transition-all">
+                            JOIN
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="openMenuModal()" class="w-full py-2 bg-transparent text-slate-400 text-xs font-bold hover:text-slate-600 transition-all">
+                    Cancel & Back
+                </button>
+            </div>
+
+            <!-- WAITING FOR OPPONENT STATE -->
+            <div id="room-state-waiting" class="hidden space-y-4">
+                <div class="w-16 h-16 mx-auto relative flex items-center justify-center">
+                    <div class="absolute inset-0 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+                    <i class="fa-solid fa-key text-2xl text-blue-600"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-black text-slate-800">ROOM CREATED!</h3>
+                    <p class="text-xs text-slate-500">Share this Room Code with your friend</p>
+                </div>
+
+                <div class="bg-slate-50 border border-blue-200 rounded-2xl p-4 flex flex-col items-center justify-center gap-2">
+                    <div id="display-room-code" class="text-3xl font-mono font-black tracking-widest text-blue-600">------</div>
+                    <button onclick="copyRoomCode()" id="btn-copy-code" class="px-3 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 border border-blue-300 rounded-xl text-[10px] font-extrabold flex items-center gap-1.5 transition-all">
+                        <i class="fa-solid fa-copy"></i>
+                        <span>COPY ROOM CODE</span>
+                    </button>
+                </div>
+
+                <div class="text-xs text-slate-500 flex items-center justify-center gap-2 animate-pulse font-semibold">
+                    <i class="fa-solid fa-spinner animate-spin text-blue-600"></i>
+                    <span>Waiting for opponent to join...</span>
+                </div>
+
+                <button onclick="leaveRoomSession()" class="w-full py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all border border-slate-200">
+                    Cancel Room
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MAIN MENU MODAL -->
+    <div id="modal-menu" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden">
+            <div class="w-16 h-16 mx-auto mb-3 rounded-2xl bg-blue-600 text-white flex items-center justify-center shadow-lg shadow-blue-600/30">
+                <i class="fa-solid fa-table-cells text-3xl"></i>
+            </div>
+            <h2 class="text-2xl font-black text-theme-navy tracking-tight mb-0.5">SUDOKU BATTLE</h2>
+            <p class="text-xs text-slate-500 mb-6">Light Theme 1v1 Arena</p>
+
+            <div class="space-y-3 mb-6">
+                <!-- 1v1 Online Private Room -->
+                <button onclick="openPrivateRoomModal()" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-4 rounded-2xl font-bold flex items-center justify-between shadow-md shadow-blue-600/20 transition-all active:scale-[0.98]">
+                    <div class="flex items-center gap-3 text-left">
+                        <div class="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
+                            <i class="fa-solid fa-users text-white text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-black">1v1 ONLINE ROOM</div>
+                            <div class="text-[10px] text-blue-100">Play with a real friend in private room</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-white/70"></i>
+                </button>
+
+                <!-- 1v1 VS AI Bot -->
+                <button onclick="startAiMatch()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 p-3.5 rounded-2xl font-bold flex items-center justify-between transition-all active:scale-[0.98] border border-slate-200">
+                    <div class="flex items-center gap-3 text-left">
+                        <div class="w-9 h-9 rounded-xl bg-cyan-100 text-cyan-600 flex items-center justify-center">
+                            <i class="fa-solid fa-robot text-base"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs font-bold text-slate-800">1v1 VS AI BOT</div>
+                            <div class="text-[10px] text-slate-500">Battle adaptive smart AI</div>
+                        </div>
+                    </div>
+                    <i class="fa-solid fa-chevron-right text-xs text-slate-400"></i>
+                </button>
+
+                <!-- Solo Practice -->
+                <div class="bg-slate-50 p-3 rounded-2xl border border-slate-200 text-left">
+                    <div class="text-xs font-bold text-slate-600 mb-2 flex items-center justify-between">
+                        <span>SOLO PRACTICE MODE</span>
+                        <i class="fa-solid fa-user text-slate-400"></i>
+                    </div>
+                    <div class="grid grid-cols-4 gap-1.5">
+                        <button onclick="startSoloGame('easy')" class="py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-xs rounded-xl border border-emerald-200 transition-all text-center">Easy</button>
+                        <button onclick="startSoloGame('medium')" class="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-xl border border-blue-200 transition-all text-center">Med</button>
+                        <button onclick="startSoloGame('hard')" class="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 font-bold text-xs rounded-xl border border-amber-200 transition-all text-center">Hard</button>
+                        <button onclick="startSoloGame('expert')" class="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold text-xs rounded-xl border border-rose-200 transition-all text-center">Exp</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pt-3 border-t border-slate-200 flex justify-around text-center text-xs text-slate-500">
+                <div>
+                    <div class="font-black text-slate-800" id="stat-menu-rating">1240</div>
+                    <div class="text-[9px] font-semibold">Rank Rating</div>
+                </div>
+                <div>
+                    <div class="font-black text-slate-800" id="stat-menu-wins">0</div>
+                    <div class="text-[9px] font-semibold">Total Wins</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MATCH RESULTS MODAL -->
+    <div id="modal-results" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="max-w-sm w-full bg-white border border-slate-200 rounded-3xl p-6 shadow-2xl text-center relative overflow-hidden pop-in">
+            <div id="res-banner" class="w-18 h-18 mx-auto mb-3 rounded-3xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 text-4xl p-4">
+                <i class="fa-solid fa-trophy"></i>
+            </div>
+
+            <h2 id="res-title" class="text-2xl font-black text-slate-800 mb-0.5">VICTORY!</h2>
+            <p id="res-subtitle" class="text-xs text-emerald-600 font-bold mb-4">You dominated the 1v1 match!</p>
+
+            <div class="bg-slate-50 rounded-2xl p-4 border border-slate-200 space-y-2.5 mb-6 text-xs font-semibold">
+                <div class="flex justify-between items-center text-slate-600">
+                    <span>Match Time</span>
+                    <span id="res-time" class="font-mono font-bold text-slate-800">02:45</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-600">
+                    <span>Final Score</span>
+                    <span id="res-score" class="font-bold text-amber-600">1,450 pts</span>
+                </div>
+                <div class="flex justify-between items-center text-slate-600">
+                    <span>Accuracy</span>
+                    <span id="res-accuracy" class="font-bold text-blue-600">94%</span>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button onclick="openMenuModal()" class="py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-all">
+                    Main Menu
+                </button>
+                <button onclick="rematchGame()" class="py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shadow-md shadow-blue-600/20">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Firebase Setup Config
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sudoku-battle-light';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "demo-api-key",
+            authDomain: "demo-app.firebaseapp.com",
+            projectId: "demo-app",
+            storageBucket: "demo-app.appspot.com",
+            messagingSenderId: "123456789",
+            appId: "1:123456789:web:abcdef"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        let currentUser = null;
+        let roomUnsubscribe = null;
+
+        async function initAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    const cred = await signInWithCustomToken(auth, __initial_auth_token);
+                    currentUser = cred.user;
+                } else {
+                    const cred = await signInAnonymously(auth);
+                    currentUser = cred.user;
+                }
+            } catch (err) {
+                console.warn("Auth initialization fallback:", err);
+                currentUser = { uid: 'user-' + Math.random().toString(36).substr(2, 6) };
+            }
+        }
+        initAuth();
+
+        window.firebaseMultiplayer = {
+            createRoom: async (puzzleData) => {
+                if (!currentUser) await initAuth();
+                const roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode);
+
+                const roomPayload = {
+                    code: roomCode,
+                    status: 'waiting',
+                    hostId: currentUser.uid,
+                    hostName: 'Host Player',
+                    hostScore: 0,
+                    hostProgress: 0,
+                    hostFrozen: false,
+                    guestId: null,
+                    guestName: 'Opponent',
+                    guestScore: 0,
+                    guestProgress: 0,
+                    guestFrozen: false,
+                    puzzle: JSON.stringify(puzzleData.puzzle),
+                    solution: JSON.stringify(puzzleData.solution),
+                    winnerId: null,
+                    createdAt: Date.now()
+                };
+
+                await setDoc(roomRef, roomPayload);
+                return roomCode;
+            },
+
+            joinRoom: async (roomCode) => {
+                if (!currentUser) await initAuth();
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+                const roomSnap = await getDoc(roomRef);
+
+                if (!roomSnap.exists()) {
+                    throw new Error("Room code does not exist!");
+                }
+
+                const data = roomSnap.data();
+                if (data.status !== 'waiting' && data.guestId !== currentUser.uid) {
+                    throw new Error("Room is already full or in match!");
+                }
+
+                await updateDoc(roomRef, {
+                    guestId: currentUser.uid,
+                    guestName: 'Guest Player',
+                    status: 'playing'
+                });
+
+                return data;
+            },
+
+            listenRoom: (roomCode, onUpdate) => {
+                if (roomUnsubscribe) roomUnsubscribe();
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+                roomUnsubscribe = onSnapshot(roomRef, (snapshot) => {
+                    if (snapshot.exists()) {
+                        onUpdate(snapshot.data());
+                    }
+                }, (error) => {
+                    console.error("Firestore listener error:", error);
+                });
+            },
+
+            updateProgress: async (roomCode, isHost, score, progress) => {
+                if (!roomCode) return;
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+                const payload = isHost ? { hostScore: score, hostProgress: progress } : { guestScore: score, guestProgress: progress };
+                await updateDoc(roomRef, payload);
+            },
+
+            applyFreeze: async (roomCode, targetIsHost) => {
+                if (!roomCode) return;
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+                const payload = targetIsHost ? { hostFrozen: true } : { guestFrozen: true };
+                await updateDoc(roomRef, payload);
+
+                setTimeout(async () => {
+                    const clearPayload = targetIsHost ? { hostFrozen: false } : { guestFrozen: false };
+                    await updateDoc(roomRef, clearPayload);
+                }, 4000);
+            },
+
+            signalWinner: async (roomCode, winnerId) => {
+                if (!roomCode) return;
+                const roomRef = doc(db, 'artifacts', appId, 'public', 'data', 'rooms', roomCode.toUpperCase());
+                await updateDoc(roomRef, {
+                    status: 'finished',
+                    winnerId: winnerId
+                });
+            },
+
+            getUserId: () => currentUser ? currentUser.uid : null,
+            stopListener: () => { if (roomUnsubscribe) roomUnsubscribe(); }
+        };
+    </script>
+
+    <script>
+        class SudokuEngine {
+            static isValid(board, row, col, num) {
+                for (let i = 0; i < 9; i++) {
+                    if (board[row][i] === num) return false;
+                    if (board[i][col] === num) return false;
+                    const boxRow = 3 * Math.floor(row / 3) + Math.floor(i / 3);
+                    const boxCol = 3 * Math.floor(col / 3) + (i % 3);
+                    if (board[boxRow][boxCol] === num) return false;
+                }
+                return true;
+            }
+
+            static solve(board) {
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        if (board[r][c] === 0) {
+                            const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9].sort(() => Math.random() - 0.5);
+                            for (let num of nums) {
+                                if (this.isValid(board, r, c, num)) {
+                                    board[r][c] = num;
+                                    if (this.solve(board)) return true;
+                                    board[r][c] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            static generatePuzzle(difficulty = 'easy') {
+                const solution = Array.from({ length: 9 }, () => Array(9).fill(0));
+                this.solve(solution);
+
+                const puzzle = solution.map(row => [...row]);
+                let holes = 34;
+                if (difficulty === 'medium') holes = 42;
+                if (difficulty === 'hard') holes = 50;
+                if (difficulty === 'expert') holes = 56;
+
+                let removed = 0;
+                while (removed < holes) {
+                    const r = Math.floor(Math.random() * 9);
+                    const c = Math.floor(Math.random() * 9);
+                    if (puzzle[r][c] !== 0) {
+                        puzzle[r][c] = 0;
+                        removed++;
+                    }
+                }
+
+                return { puzzle, solution };
+            }
+        }
+
+        let gameState = {
+            mode: 'online', // 'online', 'ai', 'solo'
+            difficulty: 'easy',
+            puzzle: [],
+            solution: [],
+            userGrid: [],
+            notesGrid: [],
+            selectedCell: null,
+            isNotesMode: false,
+            score: 0,
+            mistakes: 0,
+            maxMistakes: 3,
+            streak: 0,
+            timer: 0,
+            timerInterval: null,
+            history: [],
+            
+            // Online Private Room State
+            activeRoomCode: null,
+            isRoomHost: false,
+            
+            // Opponent Details
+            oppScore: 0,
+            oppProgress: 0,
+            oppInterval: null,
+            oppFrozen: false,
+            userFrozen: false,
+            powerupShield: false,
+            
+            // Stats
+            totalPlacements: 0,
+            correctPlacements: 0,
+            userRating: 1240,
+            wins: 0
+        };
+
+        const BOT_NAMES = ['CyberNinja', 'SudokuBot', 'ByteMaster', 'PixelPro', 'ChronoA.I.'];
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initSudokuDOM();
+            setupKeyboardEvents();
+            openMenuModal();
+        });
+
+        function initSudokuDOM() {
+            const gridEl = document.getElementById('sudoku-grid');
+            gridEl.innerHTML = '';
+
+            for (let r = 0; r < 9; r++) {
+                const rowEl = document.createElement('div');
+                rowEl.className = 'sudoku-row grid grid-cols-9 w-full h-full';
+
+                for (let c = 0; c < 9; c++) {
+                    const cellEl = document.createElement('button');
+                    cellEl.id = `cell-${r}-${c}`;
+                    cellEl.className = `sudoku-cell border-r border-b border-slate-300 flex items-center justify-center font-extrabold text-xl leading-none transition-all duration-100 focus:outline-none relative`;
+                    cellEl.onclick = () => selectCell(r, c);
+                    
+                    const notesOverlay = document.createElement('div');
+                    notesOverlay.id = `notes-${r}-${c}`;
+                    notesOverlay.className = 'absolute inset-0 grid grid-cols-3 grid-rows-3 p-0.5 text-[8px] font-semibold text-blue-600 pointer-events-none hidden';
+                    for (let n = 1; n <= 9; n++) {
+                        const noteNum = document.createElement('span');
+                        noteNum.id = `note-${r}-${c}-${n}`;
+                        noteNum.className = 'flex items-center justify-center opacity-0';
+                        noteNum.innerText = n;
+                        notesOverlay.appendChild(noteNum);
+                    }
+                    cellEl.appendChild(notesOverlay);
+
+                    const valSpan = document.createElement('span');
+                    valSpan.id = `val-${r}-${c}`;
+                    valSpan.className = 'z-10';
+                    cellEl.appendChild(valSpan);
+
+                    rowEl.appendChild(cellEl);
+                }
+                gridEl.appendChild(rowEl);
+            }
+        }
+
+        function openMenuModal() {
+            clearInterval(gameState.timerInterval);
+            clearInterval(gameState.oppInterval);
+            if (window.firebaseMultiplayer) window.firebaseMultiplayer.stopListener();
+
+            document.getElementById('modal-menu').classList.remove('hidden');
+            document.getElementById('modal-private-room').classList.add('hidden');
+            document.getElementById('modal-results').classList.add('hidden');
+        }
+
+        function openPrivateRoomModal() {
+            document.getElementById('modal-menu').classList.add('hidden');
+            document.getElementById('modal-private-room').classList.remove('hidden');
+            document.getElementById('room-state-create').classList.remove('hidden');
+            document.getElementById('room-state-waiting').classList.add('hidden');
+            document.getElementById('join-input-section').classList.add('hidden');
+        }
+
+        function showJoinRoomInput() {
+            document.getElementById('join-input-section').classList.toggle('hidden');
+        }
+
+        async function createOnlineRoom() {
+            try {
+                const puzzleData = SudokuEngine.generatePuzzle('easy');
+                const code = await window.firebaseMultiplayer.createRoom(puzzleData);
+
+                gameState.activeRoomCode = code;
+                gameState.isRoomHost = true;
+                gameState.mode = 'online';
+
+                document.getElementById('display-room-code').innerText = code;
+                document.getElementById('room-state-create').classList.add('hidden');
+                document.getElementById('room-state-waiting').classList.remove('hidden');
+
+                window.firebaseMultiplayer.listenRoom(code, (data) => {
+                    if (data.status === 'playing') {
+                        document.getElementById('modal-private-room').classList.add('hidden');
+                        document.getElementById('hud-battle').classList.remove('hidden');
+                        document.getElementById('hud-solo').classList.add('hidden');
+                        document.getElementById('powerups-container').classList.remove('hidden');
+
+                        document.getElementById('room-code-badge').classList.remove('hidden');
+                        document.getElementById('active-room-id').innerText = code;
+
+                        document.getElementById('p1-name').innerText = 'You (Host)';
+                        document.getElementById('opp-name').innerText = 'Friend (Guest)';
+                        document.getElementById('opp-status-badge').innerText = 'LIVE';
+
+                        startNewGameSession({
+                            puzzle: JSON.parse(data.puzzle),
+                            solution: JSON.parse(data.solution)
+                        });
+                    }
+                    syncOnlineOpponentData(data);
+                });
+
+            } catch (e) {
+                alert("Failed to create room: " + e.message);
+            }
+        }
+
+        async function joinOnlineRoom() {
+            const code = document.getElementById('input-room-code').value.trim().toUpperCase();
+            if (code.length < 5) return alert("Please enter a valid 6-character room code!");
+
+            try {
+                const data = await window.firebaseMultiplayer.joinRoom(code);
+                gameState.activeRoomCode = code;
+                gameState.isRoomHost = false;
+                gameState.mode = 'online';
+
+                document.getElementById('modal-private-room').classList.add('hidden');
+                document.getElementById('hud-battle').classList.remove('hidden');
+                document.getElementById('hud-solo').classList.add('hidden');
+                document.getElementById('powerups-container').classList.remove('hidden');
+
+                document.getElementById('room-code-badge').classList.remove('hidden');
+                document.getElementById('active-room-id').innerText = code;
+
+                document.getElementById('p1-name').innerText = 'You (Guest)';
+                document.getElementById('opp-name').innerText = 'Host Player';
+                document.getElementById('opp-status-badge').innerText = 'LIVE';
+
+                startNewGameSession({
+                    puzzle: JSON.parse(data.puzzle),
+                    solution: JSON.parse(data.solution)
+                });
+
+                window.firebaseMultiplayer.listenRoom(code, (roomData) => {
+                    syncOnlineOpponentData(roomData);
+                });
+
+            } catch (e) {
+                alert("Error joining room: " + e.message);
+            }
+        }
+
+        function copyRoomCode() {
+            const code = document.getElementById('display-room-code').innerText;
+            const tempInput = document.createElement('input');
+            tempInput.value = code;
+            document.body.appendChild(tempInput);
+            tempInput.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempInput);
+
+            const btn = document.getElementById('btn-copy-code');
+            btn.innerHTML = '<i class="fa-solid fa-check text-emerald-600"></i> COPIED!';
+            setTimeout(() => {
+                btn.innerHTML = '<i class="fa-solid fa-copy"></i> COPY ROOM CODE';
+            }, 2000);
+        }
+
+        function leaveRoomSession() {
+            if (window.firebaseMultiplayer) window.firebaseMultiplayer.stopListener();
+            openMenuModal();
+        }
+
+        function syncOnlineOpponentData(data) {
+            if (!data) return;
+
+            const isHost = gameState.isRoomHost;
+            const oppScore = isHost ? data.guestScore : data.hostScore;
+            const oppProgress = isHost ? data.guestProgress : data.hostProgress;
+            const userFrozen = isHost ? data.hostFrozen : data.guestFrozen;
+
+            gameState.oppScore = oppScore || 0;
+            gameState.oppProgress = oppProgress || 0;
+            gameState.userFrozen = !!userFrozen;
+
+            const overlay = document.getElementById('board-frozen-overlay');
+            if (gameState.userFrozen) {
+                overlay.classList.remove('hidden');
+            } else {
+                overlay.classList.add('hidden');
+            }
+
+            updateScoreUI();
+
+            if (data.status === 'finished' && data.winnerId) {
+                const myId = window.firebaseMultiplayer.getUserId();
+                triggerGameOver(data.winnerId === myId);
+            }
+        }
+
+        function startAiMatch() {
+            gameState.mode = 'ai';
+            document.getElementById('modal-menu').classList.add('hidden');
+            document.getElementById('hud-battle').classList.remove('hidden');
+            document.getElementById('hud-solo').classList.add('hidden');
+            document.getElementById('powerups-container').classList.remove('hidden');
+            document.getElementById('room-code-badge').classList.add('hidden');
+
+            const botName = BOT_NAMES[Math.floor(Math.random() * BOT_NAMES.length)];
+            document.getElementById('p1-name').innerText = 'You';
+            document.getElementById('opp-name').innerText = botName;
+            document.getElementById('opp-avatar').src = `https://api.dicebear.com/7.x/bottts/svg?seed=${botName}`;
+            document.getElementById('opp-status-badge').innerText = 'BOT';
+
+            startNewGameSession();
+        }
+
+        function startSoloGame(diff = 'easy') {
+            gameState.mode = 'solo';
+            gameState.difficulty = diff;
+            document.getElementById('modal-menu').classList.add('hidden');
+            document.getElementById('hud-battle').classList.add('hidden');
+            document.getElementById('hud-solo').classList.remove('hidden');
+            document.getElementById('powerups-container').classList.add('hidden');
+
+            document.getElementById('solo-diff-badge').innerText = diff.toUpperCase();
+            startNewGameSession();
+        }
+
+        function startNewGameSession(customPuzzle = null) {
+            const { puzzle, solution } = customPuzzle || SudokuEngine.generatePuzzle(gameState.difficulty);
+            gameState.puzzle = puzzle;
+            gameState.solution = solution;
+            gameState.userGrid = puzzle.map(r => [...r]);
+            gameState.notesGrid = Array.from({ length: 9 }, () => Array.from({ length: 9 }, () => new Set()));
+            gameState.selectedCell = null;
+            gameState.score = 0;
+            gameState.mistakes = 0;
+            gameState.streak = 0;
+            gameState.timer = 0;
+            gameState.history = [];
+            gameState.oppScore = 0;
+            gameState.oppProgress = 0;
+            gameState.oppFrozen = false;
+            gameState.userFrozen = false;
+            gameState.powerupShield = false;
+            gameState.totalPlacements = 0;
+            gameState.correctPlacements = 0;
+
+            updateScoreUI();
+            updateMistakesUI();
+            resetPowerupsUI();
+
+            clearInterval(gameState.timerInterval);
+            gameState.timerInterval = setInterval(() => {
+                gameState.timer++;
+                const mins = String(Math.floor(gameState.timer / 60)).padStart(2, '0');
+                const secs = String(gameState.timer % 60).padStart(2, '0');
+                document.getElementById('game-timer').innerText = `${mins}:${secs}`;
+                document.getElementById('solo-timer').innerText = `${mins}:${secs}`;
+            }, 1000);
+
+            if (gameState.mode === 'ai') {
+                startOpponentAI();
+            }
+
+            renderBoard();
+        }
+
+        function renderBoard() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cellVal = gameState.userGrid[r][c];
+                    const initialVal = gameState.puzzle[r][c];
+                    const valSpan = document.getElementById(`val-${r}-${c}`);
+                    const cellEl = document.getElementById(`cell-${r}-${c}`);
+                    const notesOverlay = document.getElementById(`notes-${r}-${c}`);
+
+                    valSpan.innerText = cellVal !== 0 ? cellVal : '';
+                    
+                    if (initialVal !== 0) {
+                        cellEl.className = `sudoku-cell border-r border-b border-slate-300 flex items-center justify-center font-black text-2xl text-theme-navy bg-white cursor-default`;
+                    } else if (cellVal !== 0) {
+                        const isCorrect = cellVal === gameState.solution[r][c];
+                        cellEl.className = `sudoku-cell border-r border-b border-slate-300 flex items-center justify-center font-bold text-2xl ${isCorrect ? 'text-blue-700 bg-white' : 'text-rose-600 bg-rose-50'} cursor-pointer`;
+                    } else {
+                        cellEl.className = `sudoku-cell border-r border-b border-slate-300 flex items-center justify-center font-bold text-xl text-slate-800 bg-white cursor-pointer`;
+                    }
+
+                    if (cellVal === 0 && gameState.notesGrid[r][c].size > 0) {
+                        notesOverlay.classList.remove('hidden');
+                        for (let n = 1; n <= 9; n++) {
+                            const noteEl = document.getElementById(`note-${r}-${c}-${n}`);
+                            if (gameState.notesGrid[r][c].has(n)) {
+                                noteEl.classList.remove('opacity-0');
+                                noteEl.classList.add('opacity-100');
+                            } else {
+                                noteEl.classList.add('opacity-0');
+                            }
+                        }
+                    } else {
+                        notesOverlay.classList.add('hidden');
+                    }
+                }
+            }
+            highlightCells();
+        }
+
+        function selectCell(r, c) {
+            soundFX.playTap();
+            gameState.selectedCell = { row: r, col: c };
+            highlightCells();
+        }
+
+        function highlightCells() {
+            const sel = gameState.selectedCell;
+
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    const cellEl = document.getElementById(`cell-${r}-${c}`);
+                    const cellVal = gameState.userGrid[r][c];
+                    
+                    cellEl.style.backgroundColor = '';
+
+                    if (!sel) continue;
+
+                    const isSelected = sel.row === r && sel.col === c;
+                    const isSameRowCol = sel.row === r || sel.col === c;
+                    const isSameBlock = Math.floor(sel.row / 3) === Math.floor(r / 3) && Math.floor(sel.col / 3) === Math.floor(c / 3);
+                    const selectedVal = gameState.userGrid[sel.row][sel.col];
+                    const isSameNumber = selectedVal !== 0 && cellVal === selectedVal;
+
+                    if (isSelected) {
+                        // Reference color: Bright soft cornflower blue
+                        cellEl.style.backgroundColor = '#8ca8f7';
+                    } else if (isSameNumber) {
+                        // Reference color: Soft periwinkle/blue tint
+                        cellEl.style.backgroundColor = '#b9c9ff';
+                    } else if (isSameRowCol || isSameBlock) {
+                        // Reference color: Soft faint lavender/gray highlight
+                        cellEl.style.backgroundColor = '#ebf0ff';
+                    }
+                }
+            }
+        }
+
+        function inputDigit(num) {
+            if (!gameState.selectedCell || gameState.userFrozen) return;
+            const { row, col } = gameState.selectedCell;
+
+            if (gameState.puzzle[row][col] !== 0) return;
+
+            gameState.history.push({
+                row, col,
+                prevVal: gameState.userGrid[row][col],
+                prevNotes: new Set(gameState.notesGrid[row][col])
+            });
+
+            if (gameState.isNotesMode) {
+                soundFX.playTap();
+                if (gameState.notesGrid[row][col].has(num)) {
+                    gameState.notesGrid[row][col].delete(num);
+                } else {
+                    gameState.notesGrid[row][col].add(num);
+                }
+            } else {
+                gameState.userGrid[row][col] = num;
+                gameState.notesGrid[row][col].clear();
+                gameState.totalPlacements++;
+
+                const isCorrect = num === gameState.solution[row][col];
+
+                if (isCorrect) {
+                    soundFX.playSuccess();
+                    gameState.correctPlacements++;
+                    gameState.streak++;
+                    
+                    const points = 100 + (gameState.streak * 20);
+                    gameState.score += points;
+
+                    const cellEl = document.getElementById(`cell-${row}-${col}`);
+                    cellEl.classList.add('pop-in');
+                    setTimeout(() => cellEl.classList.remove('pop-in'), 200);
+
+                    if (gameState.mode === 'online' && window.firebaseMultiplayer) {
+                        const totalEmpty = gameState.puzzle.flat().filter(v => v === 0).length;
+                        let userCorrect = 0;
+                        for (let r = 0; r < 9; r++) {
+                            for (let c = 0; c < 9; c++) {
+                                if (gameState.puzzle[r][c] === 0 && gameState.userGrid[r][c] === gameState.solution[r][c]) {
+                                    userCorrect++;
+                                }
+                            }
+                        }
+                        const progressPct = Math.round((userCorrect / totalEmpty) * 100);
+                        window.firebaseMultiplayer.updateProgress(gameState.activeRoomCode, gameState.isRoomHost, gameState.score, progressPct);
+                    }
+
+                    checkWinCondition();
+                } else {
+                    soundFX.playError();
+                    gameState.streak = 0;
+
+                    if (gameState.powerupShield) {
+                        gameState.powerupShield = false;
+                        document.getElementById('pw-shield').classList.remove('ring-2', 'ring-pink-400');
+                    } else {
+                        gameState.mistakes++;
+                        gameState.score = Math.max(0, gameState.score - 50);
+                    }
+
+                    if (gameState.mistakes >= gameState.maxMistakes) {
+                        triggerGameOver(false);
+                    }
+                }
+
+                updateScoreUI();
+                updateMistakesUI();
+            }
+
+            renderBoard();
+        }
+
+        function toggleNotesMode() {
+            soundFX.playTap();
+            gameState.isNotesMode = !gameState.isNotesMode;
+            const badge = document.getElementById('badge-notes');
+            const btn = document.getElementById('btn-notes');
+
+            if (gameState.isNotesMode) {
+                badge.innerText = 'ON';
+                badge.className = 'absolute top-1 right-2 text-[8px] font-black px-1 rounded bg-blue-600 text-white';
+                btn.classList.add('border-blue-500', 'bg-blue-50');
+            } else {
+                badge.innerText = 'OFF';
+                badge.className = 'absolute top-1 right-2 text-[8px] font-black px-1 rounded bg-slate-200 text-slate-600';
+                btn.classList.remove('border-blue-500', 'bg-blue-50');
+            }
+        }
+
+        function actionUndo() {
+            if (gameState.history.length === 0 || gameState.userFrozen) return;
+            soundFX.playTap();
+            const last = gameState.history.pop();
+            gameState.userGrid[last.row][last.col] = last.prevVal;
+            gameState.notesGrid[last.row][last.col] = last.prevNotes;
+            renderBoard();
+        }
+
+        function actionErase() {
+            if (!gameState.selectedCell || gameState.userFrozen) return;
+            const { row, col } = gameState.selectedCell;
+            if (gameState.puzzle[row][col] !== 0) return;
+
+            soundFX.playTap();
+            gameState.userGrid[row][col] = 0;
+            gameState.notesGrid[row][col].clear();
+            renderBoard();
+        }
+
+        function actionHint() {
+            if (!gameState.selectedCell || gameState.userFrozen) return;
+            const { row, col } = gameState.selectedCell;
+            if (gameState.puzzle[row][col] !== 0 || gameState.userGrid[row][col] === gameState.solution[row][col]) return;
+
+            soundFX.playPowerup();
+            gameState.userGrid[row][col] = gameState.solution[row][col];
+            gameState.score = Math.max(0, gameState.score - 30);
+            updateScoreUI();
+            renderBoard();
+            checkWinCondition();
+        }
+
+        function startOpponentAI() {
+            clearInterval(gameState.oppInterval);
+            gameState.oppInterval = setInterval(() => {
+                if (gameState.oppFrozen) return;
+
+                gameState.oppScore += Math.floor(Math.random() * 80) + 70;
+                const emptyCellsCount = gameState.puzzle.flat().filter(v => v === 0).length;
+                const progressInc = (1 / emptyCellsCount) * 100;
+                gameState.oppProgress = Math.min(100, gameState.oppProgress + progressInc);
+
+                updateScoreUI();
+
+                if (gameState.oppProgress >= 100) {
+                    triggerGameOver(false);
+                }
+            }, 3800);
+        }
+
+        function usePowerup(type) {
+            if (gameState.mode === 'solo' || gameState.userFrozen) return;
+
+            if (type === 'freeze') {
+                const btn = document.getElementById('pw-freeze');
+                if (btn.disabled) return;
+                soundFX.playPowerup();
+                btn.disabled = true;
+
+                if (gameState.mode === 'online' && window.firebaseMultiplayer) {
+                    window.firebaseMultiplayer.applyFreeze(gameState.activeRoomCode, !gameState.isRoomHost);
+                } else {
+                    gameState.oppFrozen = true;
+                    setTimeout(() => { gameState.oppFrozen = false; }, 4000);
+                }
+            } 
+            else if (type === 'hint') {
+                const btn = document.getElementById('pw-hint');
+                if (btn.disabled) return;
+                btn.disabled = true;
+
+                for (let r = 0; r < 9; r++) {
+                    for (let c = 0; c < 9; c++) {
+                        if (gameState.userGrid[r][c] !== gameState.solution[r][c]) {
+                            gameState.selectedCell = { row: r, col: c };
+                            actionHint();
+                            return;
+                        }
+                    }
+                }
+            } 
+            else if (type === 'shield') {
+                const btn = document.getElementById('pw-shield');
+                if (btn.disabled) return;
+                soundFX.playPowerup();
+                btn.disabled = true;
+                gameState.powerupShield = true;
+                btn.classList.add('ring-2', 'ring-pink-400');
+            }
+        }
+
+        function resetPowerupsUI() {
+            ['pw-freeze', 'pw-hint', 'pw-shield'].forEach(id => {
+                const btn = document.getElementById(id);
+                if (btn) btn.disabled = false;
+            });
+        }
+
+        function updateScoreUI() {
+            document.getElementById('p1-score').innerText = gameState.score;
+            document.getElementById('solo-score').innerText = gameState.score;
+            document.getElementById('p2-score').innerText = gameState.oppScore;
+
+            let filledCorrect = 0;
+            let totalToFill = 0;
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (gameState.puzzle[r][c] === 0) {
+                        totalToFill++;
+                        if (gameState.userGrid[r][c] === gameState.solution[r][c]) filledCorrect++;
+                    }
+                }
+            }
+
+            const p1Pct = Math.round((filledCorrect / totalToFill) * 100);
+            document.getElementById('p1-progress-pct').innerText = `${p1Pct}%`;
+            document.getElementById('p1-progress-bar').style.width = `${p1Pct}%`;
+
+            const p2Pct = Math.round(gameState.oppProgress);
+            document.getElementById('p2-progress-pct').innerText = `${p2Pct}%`;
+            document.getElementById('p2-progress-bar').style.width = `${p2Pct}%`;
+
+            const streakBadge = document.getElementById('streak-badge');
+            if (gameState.streak >= 2) {
+                streakBadge.classList.remove('hidden');
+                document.getElementById('streak-count').innerText = gameState.streak;
+            } else {
+                streakBadge.classList.add('hidden');
+            }
+        }
+
+        function updateMistakesUI() {
+            const container = document.getElementById('mistakes-container');
+            container.innerHTML = '';
+            for (let i = 0; i < gameState.maxMistakes; i++) {
+                const icon = document.createElement('i');
+                icon.className = `fa-solid fa-xmark ${i < gameState.mistakes ? 'text-rose-500 scale-110' : 'text-slate-300'}`;
+                container.appendChild(icon);
+            }
+            document.getElementById('solo-mistakes').innerText = `Mistakes: ${gameState.mistakes}/${gameState.maxMistakes}`;
+        }
+
+        function checkWinCondition() {
+            for (let r = 0; r < 9; r++) {
+                for (let c = 0; c < 9; c++) {
+                    if (gameState.userGrid[r][c] !== gameState.solution[r][c]) {
+                        return;
+                    }
+                }
+            }
+            
+            if (gameState.mode === 'online' && window.firebaseMultiplayer) {
+                const myId = window.firebaseMultiplayer.getUserId();
+                window.firebaseMultiplayer.signalWinner(gameState.activeRoomCode, myId);
+            } else {
+                triggerGameOver(true);
+            }
+        }
+
+        function triggerGameOver(isWin) {
+            clearInterval(gameState.timerInterval);
+            clearInterval(gameState.oppInterval);
+
+            const modal = document.getElementById('modal-results');
+            const title = document.getElementById('res-title');
+            const subtitle = document.getElementById('res-subtitle');
+            const banner = document.getElementById('res-banner');
+
+            if (isWin) {
+                soundFX.playVictory();
+                launchConfetti();
+                title.innerText = 'VICTORY!';
+                subtitle.innerText = 'You dominated the Sudoku Battle Arena!';
+                banner.className = 'w-18 h-18 mx-auto mb-3 rounded-3xl bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/30 text-4xl p-4';
+                banner.innerHTML = '<i class="fa-solid fa-trophy"></i>';
+                
+                gameState.wins++;
+                gameState.userRating += 24;
+            } else {
+                soundFX.playError();
+                title.innerText = 'DEFEAT';
+                subtitle.innerText = gameState.mistakes >= gameState.maxMistakes ? '3 Strikes Reached!' : 'Opponent Finished First!';
+                banner.className = 'w-18 h-18 mx-auto mb-3 rounded-3xl bg-rose-500 text-white flex items-center justify-center shadow-lg shadow-rose-500/30 text-4xl p-4';
+                banner.innerHTML = '<i class="fa-solid fa-skull"></i>';
+
+                gameState.userRating = Math.max(1000, gameState.userRating - 16);
+            }
+
+            const mins = String(Math.floor(gameState.timer / 60)).padStart(2, '0');
+            const secs = String(gameState.timer % 60).padStart(2, '0');
+            document.getElementById('res-time').innerText = `${mins}:${secs}`;
+            document.getElementById('res-score').innerText = `${gameState.score} pts`;
+            
+            const acc = gameState.totalPlacements > 0 ? Math.round((gameState.correctPlacements / gameState.totalPlacements) * 100) : 100;
+            document.getElementById('res-accuracy').innerText = `${acc}%`;
+
+            document.getElementById('stat-menu-rating').innerText = gameState.userRating;
+            document.getElementById('stat-menu-wins').innerText = gameState.wins;
+
+            modal.classList.remove('hidden');
+        }
+
+        function rematchGame() {
+            document.getElementById('modal-results').classList.add('hidden');
+            if (gameState.mode === 'online') {
+                openPrivateRoomModal();
+            } else {
+                startNewGameSession();
+            }
+        }
+
+        function setupKeyboardEvents() {
+            document.addEventListener('keydown', (e) => {
+                if (['modal-menu', 'modal-private-room', 'modal-results'].some(id => !document.getElementById(id).classList.contains('hidden'))) {
+                    return;
+                }
+
+                if (e.key >= '1' && e.key <= '9') {
+                    inputDigit(parseInt(e.key));
+                } else if (e.key === 'Backspace' || e.key === 'Delete') {
+                    actionErase();
+                } else if (e.key.toLowerCase() === 'n') {
+                    toggleNotesMode();
+                } else if (e.key.toLowerCase() === 'u') {
+                    actionUndo();
+                } else if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                    e.preventDefault();
+                    if (!gameState.selectedCell) {
+                        selectCell(0, 0);
+                        return;
+                    }
+                    let { row, col } = gameState.selectedCell;
+                    if (e.key === 'ArrowUp') row = Math.max(0, row - 1);
+                    if (e.key === 'ArrowDown') row = Math.min(8, row + 1);
+                    if (e.key === 'ArrowLeft') col = Math.max(0, col - 1);
+                    if (e.key === 'ArrowRight') col = Math.min(8, col + 1);
+                    selectCell(row, col);
+                }
+            });
+        }
+
+        function toggleSound() {
+            soundFX.enabled = !soundFX.enabled;
+            const icon = document.getElementById('icon-sound');
+            icon.className = soundFX.enabled ? 'fa-solid fa-volume-high text-xs' : 'fa-solid fa-volume-xmark text-xs text-rose-500';
+        }
+
+        function launchConfetti() {
+            const canvas = document.getElementById('confetti-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            const colors = ['#2563eb', '#3b82f6', '#10b981', '#f59e0b', '#ec4899'];
+
+            for (let i = 0; i < 90; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 14,
+                    vy: (Math.random() - 0.7) * 14,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    size: Math.random() * 8 + 4,
+                    rotation: Math.random() * 360
+                });
+            }
+
+            let animId;
+            function render() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p, idx) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.vy += 0.22;
+                    p.rotation += 4;
+
+                    ctx.save();
+                    ctx.translate(p.x, p.y);
+                    ctx.rotate((p.rotation * Math.PI) / 180);
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    ctx.restore();
+
+                    if (p.y > canvas.height) particles.splice(idx, 1);
+                });
+
+                if (particles.length > 0) {
+                    animId = requestAnimationFrame(render);
+                } else {
+                    cancelAnimationFrame(animId);
+                }
+            }
+            render();
+        }
+    </script>
+</body>
+</html>
