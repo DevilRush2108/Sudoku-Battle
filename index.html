@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sudoku Battle 1v1</title>
-  <!-- PeerJS for Instant Direct P2P Multiplayer -->
+  <!-- PeerJS for Direct P2P Multiplayer -->
   <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
   <!-- Canvas Confetti -->
   <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
@@ -77,7 +77,6 @@
     .powerups { display: flex; gap: 8px; margin-top: 8px; }
     .power-btn { flex: 1; padding: 8px; border-radius: 10px; border: none; font-weight: 700; font-size: 0.75rem; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 4px; }
     .pw-freeze { background: #06B6D4; }
-    .pw-hint { background: var(--accent-purple); }
     .pw-shield { background: var(--accent-mint); }
 
     .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: flex; justify-content: center; align-items: center; padding: 20px; z-index: 100; }
@@ -122,9 +121,8 @@
 
     <!-- Actions -->
     <div class="action-bar">
-      <button class="action-btn" onclick="undoMove()">↩️<span>Undo</span></button>
-      <button class="action-btn" id="notesBtn" onclick="toggleNotes()">✏️<span>Notes</span></button>
       <button class="action-btn" onclick="eraseCell()">🧹<span>Erase</span></button>
+      <button class="action-btn" id="notesBtn" onclick="toggleNotes()">✏️<span>Notes</span></button>
       <button class="action-btn" onclick="useHint()">💡<span>Hint</span></button>
     </div>
 
@@ -177,16 +175,12 @@
 </div>
 
 <script>
-  // Game State
   let board = [], solution = [], initial = [], notes = Array.from({length:81}, ()=>[]);
   let selectedCell = null, isNotesMode = false, gameMode = 'solo';
   let p1Score = 0, p2Score = 0, p1Completed = 0, p2Completed = 0;
-  let undoStack = [], isFrozen = false, hasShield = false;
-  
-  // PeerJS P2P Networking
+  let isFrozen = false, hasShield = false;
   let peer = null, conn = null;
 
-  // Sound Engine
   const ctx = new (window.AudioContext || window.webkitAudioContext)();
   function playTone(freq, type="sine", duration=0.1) {
     try {
@@ -238,8 +232,10 @@
     document.getElementById('gameScreen').classList.remove('hidden');
     document.getElementById('modeBadge').innerText = mode.toUpperCase();
 
-    const data = generateSudoku();
-    solution = data.sol; initial = [...data.init]; board = [...data.init];
+    if(mode !== 'p2p') {
+      const data = generateSudoku();
+      solution = data.sol; initial = [...data.init]; board = [...data.init];
+    }
 
     if(mode !== 'solo') {
       document.getElementById('duelHeader').classList.remove('hidden');
@@ -331,6 +327,13 @@
     document.getElementById('notesBtn').classList.toggle('active', isNotesMode);
   }
 
+  function useHint() {
+    if(selectedCell === null || initial[selectedCell] !== 0) return;
+    board[selectedCell] = solution[selectedCell];
+    p1Score = Math.max(0, p1Score - 10);
+    renderBoard();
+  }
+
   function updateHeader() {
     document.getElementById('p1Score').innerText = `${p1Score} pts`;
     document.getElementById('p1Progress').style.width = `${(p1Completed/41)*100}%`;
@@ -341,18 +344,14 @@
   function usePowerup(type) {
     if(type === 'freeze') {
       if(conn) conn.send({ type: 'FREEZE' });
-      else if(gameMode === 'ai') triggerAiFreeze();
+      else if(gameMode === 'ai') alert("Freeze sent to AI!");
     } else if(type === 'shield') {
       hasShield = true;
-      alert("Shield Active! You are protected from the next Freeze attack.");
+      alert("Shield Active! Protected from next Freeze.");
     }
   }
 
-  function triggerAiFreeze() {
-    // Simulated AI Freeze Response
-  }
-
-  // P2P MULTIPLAYER SYSTEM
+  // ROOM MULTIPLAYER (PeerJS)
   function showRoomModal() { document.getElementById('roomModal').classList.remove('hidden'); }
   function closeRoomModal() { document.getElementById('roomModal').classList.add('hidden'); }
 
@@ -362,14 +361,18 @@
     document.getElementById('roomCodeDisplay').innerText = code;
     document.getElementById('waitModal').classList.remove('hidden');
 
+    const data = generateSudoku();
+    solution = data.sol; initial = [...data.init]; board = [...data.init];
+
     peer = new Peer(code);
     peer.on('connection', (c) => {
       conn = c;
       setupP2PConnection();
       document.getElementById('waitModal').classList.add('hidden');
       startMatch('p2p', 'Friend');
-      // Send generated puzzle to client
-      conn.send({ type: 'START', sol: solution, init: initial });
+      setTimeout(() => {
+        conn.send({ type: 'START', sol: solution, init: initial });
+      }, 500);
     });
   }
 
@@ -398,7 +401,7 @@
       } else if(data.type === 'FREEZE') {
         if(hasShield) {
           hasShield = false;
-          alert("Your Shield blocked an incoming Freeze attack!");
+          alert("Your Shield blocked a Freeze attack!");
         } else {
           isFrozen = true;
           document.getElementById('board').classList.add('frozen-screen');
@@ -418,7 +421,7 @@
   function copyCode() {
     const code = document.getElementById('roomCodeDisplay').innerText;
     navigator.clipboard.writeText(code);
-    alert("Room code copied to clipboard!");
+    alert("Room code copied!");
   }
 
   function startAILogic() {
@@ -427,7 +430,6 @@
         p2Completed++;
         p2Score += 50;
         updateHeader();
-        if(p2Completed >= 41) alert("AI won the match!");
       }
     }, 4000);
   }
@@ -435,11 +437,10 @@
   function checkWin() {
     if(p1Completed >= 41) {
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-      alert("🎉 Victory! You won the battle!");
+      alert("🎉 Victory! You won!");
     }
   }
 
-  // Init
   initBoard();
 </script>
 </body>
